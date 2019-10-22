@@ -40,10 +40,17 @@ private:
         PP_S = 64,
         PP_T = 128,
         PP_VTX_IDX = 256,
-
     };
     uint32_t mVtxProp = 0;
     uint32_t mFaceProp = 0;
+
+    enum VtxPropType {
+        VPT_Unknown,
+        VPT_XYZ_NXNYNZ_ST,
+        VPT_XYZ_ST,
+    };
+    VtxPropType mVtxPropType;
+
 
     int Read1(void);
     int ReadSignature(void);

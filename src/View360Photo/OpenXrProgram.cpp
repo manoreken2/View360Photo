@@ -273,7 +273,10 @@ namespace {
             m_cubeGraphics->InitGraphcisResources(device, dctx);
 
             // Deviceが出来たので、リソース作成。
-            m_tmr.LoadPlyMesh(L"sphere.ply");
+            hr = m_tmr.LoadPlyMesh(L"sphere.ply");
+            if (FAILED(hr)) {
+                return hr;
+            }
             m_tmr.InitGraphcisResources(device, dctx);
             hr = m_tmr.LoadTextureFromFile(L"360.jpg");
             if (FAILED(hr)) {

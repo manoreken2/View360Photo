@@ -14,6 +14,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "xrUtility", "xrUtility", "{
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "View360Photo", "src\View360Photo\View360Photo.vcxproj", "{A75A907B-8952-4ED2-BC2D-A68F09CEBD83}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GenerateSpherePly", "GenerateSpherePly\GenerateSpherePly.csproj", "{5F1903DE-5E1A-4005-B221-E6E2F737FE11}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -24,6 +26,10 @@ Global
 		{A75A907B-8952-4ED2-BC2D-A68F09CEBD83}.Debug|x64.Build.0 = Debug|x64
 		{A75A907B-8952-4ED2-BC2D-A68F09CEBD83}.Release|x64.ActiveCfg = Release|x64
 		{A75A907B-8952-4ED2-BC2D-A68F09CEBD83}.Release|x64.Build.0 = Release|x64
+		{5F1903DE-5E1A-4005-B221-E6E2F737FE11}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{5F1903DE-5E1A-4005-B221-E6E2F737FE11}.Debug|x64.Build.0 = Debug|Any CPU
+		{5F1903DE-5E1A-4005-B221-E6E2F737FE11}.Release|x64.ActiveCfg = Release|Any CPU
+		{5F1903DE-5E1A-4005-B221-E6E2F737FE11}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

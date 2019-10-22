@@ -73,19 +73,41 @@ PlyReader::Read1(void)
     return rv;
 }
 
+static char *
+FGetS(char *s, int sizeof_s, FILE *fp)
+{
+    memset(s, 0, sizeof_s);
+    char *r = fgets(s, sizeof_s-1, fp);
+    if (r == nullptr) {
+        return r;
+    }
+
+    // trim last LF
+    int len = (int)strlen(s);
+    if (s[len - 1] == '\n') {
+        s[len - 1] = 0;
+    }
+
+    // trim last CR
+    len = (int)strlen(s);
+    if (s[len - 1] == '\r') {
+        s[len - 1] = 0;
+    }
+    return r;
+}
+
 int
 PlyReader::ReadSignature(void)
 {
     char s[256];
-    memset(s, 0, sizeof s);
 
-    char *r = fgets(s, sizeof s - 1, mFp);
+    char *r = FGetS(s, sizeof s, mFp);
     if (r == nullptr) {
         printf("E: PlyReader::ReadSignature() failed.\n");
         return E_FAIL;
     }
 
-    if (0 != strncmp("ply", r, 3)) {
+    if (0 != strcmp("ply", r)) {
         printf("E: PlyReader::ReadSignature() Not PLY file.\n");
         return E_FAIL;
     }
@@ -103,9 +125,8 @@ PlyReader::ReadFormat(void)
     char* tknVersion = nullptr;
     char* nextTkn    = nullptr;
     char s[256];
-    memset(s, 0, sizeof s);
 
-    char* r = fgets(s, sizeof s - 1, mFp);
+    char* r = FGetS(s, sizeof s, mFp);
     if (r == nullptr) {
         printf("E: PlyReader::ReadFormat() failed.\n");
         return E_FAIL;
@@ -144,9 +165,8 @@ PlyReader::ReadHeader(void)
     char* tkn = nullptr;
     char* nextTkn = nullptr;
     char s[256];
-    memset(s, 0, sizeof s);
 
-    char* r = fgets(s, sizeof s - 1, mFp);
+    char* r = FGetS(s, sizeof s, mFp);
     if (r == nullptr) {
         printf("E: PlyReader::ReadHeader() failed.\n");
         return E_FAIL;
@@ -167,6 +187,16 @@ PlyReader::ReadHeader(void)
         }
         if (mVtxProp == 0) {
             printf("E: PlyReader::ReadHeader() header does not contain vertex property error\n");
+            return E_FAIL;
+        }
+
+        if (mVtxProp == (PP_X | PP_Y | PP_Z | PP_NX | PP_NY | PP_NZ | PP_S | PP_T)) {
+            mVtxPropType = VPT_XYZ_NXNYNZ_ST;
+        } else if (mVtxProp == (PP_X | PP_Y | PP_Z | PP_S | PP_T)) {
+            mVtxPropType = VPT_XYZ_ST;
+        } else {
+            mVtxPropType = VPT_Unknown;
+            printf("E: PlyReader::ReadHeader() unknown property type\n");
             return E_FAIL;
         }
 
@@ -271,26 +301,35 @@ int
 PlyReader::ReadVertex(void) {
     int rv = 0;
     char s[256];
-    memset(s, 0, sizeof s);
-
-    if (mVtxProp != (PP_X | PP_Y | PP_Z | PP_NX | PP_NY | PP_NZ | PP_S | PP_T)) {
-        printf("E: PlyReader::ReadVertex() element vertex property error\n");
-        return E_FAIL;
-    }
 
     for (int i = 0; i < mNumVtx; ++i) {
-        char* r = fgets(s, sizeof s - 1, mFp);
+        char* r = FGetS(s, sizeof s, mFp);
         if (r == nullptr) {
             printf("E: PlyReader::ReadVertex() failed.\n");
             return E_FAIL;
         }
         XyzUv xyzUv;
         float nx, ny, nz;
-        rv = sscanf_s(s, "%f %f %f %f %f %f %f %f",
-            &xyzUv.xyz.x, &xyzUv.xyz.y, &xyzUv.xyz.z, &nx, &ny, &nz, &xyzUv.uv.x, &xyzUv.uv.y);
-        if (rv != 8) {
-            printf("E: PlyReader::ReadVertex() vertex item read failed %d.\n", rv);
-            return E_FAIL;
+        switch (mVtxPropType) {
+        case VPT_XYZ_NXNYNZ_ST:
+            rv = sscanf_s(s, "%f %f %f %f %f %f %f %f",
+                &xyzUv.xyz.x, &xyzUv.xyz.y, &xyzUv.xyz.z, &nx, &ny, &nz, &xyzUv.uv.x, &xyzUv.uv.y);
+            if (rv != 8) {
+                printf("E: PlyReader::ReadVertex() vertex item read failed 1 %d.\n", rv);
+                return E_FAIL;
+            }
+            break;
+        case VPT_XYZ_ST:
+            rv = sscanf_s(s, "%f %f %f %f %f",
+                &xyzUv.xyz.x, &xyzUv.xyz.y, &xyzUv.xyz.z, &xyzUv.uv.x, &xyzUv.uv.y);
+            if (rv != 5) {
+                printf("E: PlyReader::ReadVertex() vertex item read failed 2 %d.\n", rv);
+                return E_FAIL;
+            }
+            break;
+        default:
+            assert(0);
+            break;
         }
 
         mTM->vertexList.push_back(xyzUv);
@@ -305,7 +344,6 @@ PlyReader::ReadFace(void)
 {
     int rv = 0;
     char s[256];
-    memset(s, 0, sizeof s);
 
     if (mFaceProp == 0) {
         // 面が無い場合。
@@ -320,7 +358,7 @@ PlyReader::ReadFace(void)
     }
 
     for (int i = 0; i < mNumFace; ++i) {
-        char* r = fgets(s, sizeof s - 1, mFp);
+        char* r = FGetS(s, sizeof s, mFp);
         if (r == nullptr) {
             printf("E: PlyReader::ReadFace() failed.\n");
             return E_FAIL;
