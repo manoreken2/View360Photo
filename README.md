@@ -3,9 +3,9 @@ OpenXR program to view 360 equirectangular photo
 
 ## How to Use
 
-On Windows 10, download and Install Microsoft Mixed Reality Portal and Mixed Reality OpenXR Developer Portal from Microsoft Store.
+On Windows 10, download and Install 【Microsoft Mixed Reality Portal】 and 【Mixed Reality OpenXR Developer Portal】 from Microsoft Store.
 
-Download View360Photo100.zip from the release tab above and 「Extract all」.
+Download View360Photo102.zip from the release tab above and 「Extract all」.
 
 (Optional) Overwrite your equirectangular photo to existing 360.jpg on extracted folder.
 

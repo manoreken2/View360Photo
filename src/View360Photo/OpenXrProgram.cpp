@@ -270,18 +270,11 @@ namespace {
             ID3D11Device* device = m_dev.get();
             ID3D11DeviceContext* dctx = m_dctx.get();
 
-            m_cubeGraphics->InitGraphcisResources(device, dctx);
-
-            // Deviceが出来たので、リソース作成。
-            hr = m_tmr.LoadPlyMesh(L"sphere.ply");
-            if (FAILED(hr)) {
-                return hr;
-            }
+			// Deviceが出来たので、リソース作成。
+			m_cubeGraphics->InitGraphcisResources(device, dctx);
             m_tmr.InitGraphcisResources(device, dctx);
-            hr = m_tmr.LoadTextureFromFile(L"360.jpg");
-            if (FAILED(hr)) {
-                return hr;
-            }
+			
+			hr = m_tmr.Load(L"360.jpg");
 
             XrGraphicsBindingD3D11KHR graphicsBinding{XR_TYPE_GRAPHICS_BINDING_D3D11_KHR};
             graphicsBinding.device = device;

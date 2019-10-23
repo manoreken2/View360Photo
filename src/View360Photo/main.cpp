@@ -22,7 +22,7 @@
 #include <comdef.h>
 
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-constexpr const char* ProgramName = "View360Photo";
+constexpr const char* ProgramName = "View360Photo v1.0.2";
 #else
 constexpr const char* ProgramName = "BasicXrApp_uwp";
 #endif

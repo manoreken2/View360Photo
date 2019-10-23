@@ -12,21 +12,13 @@ namespace sample {
         
         virtual ~TexturedMeshRenderer() = default;
 
-        void InitGraphcisResources(ID3D11Device * device, ID3D11DeviceContext * dctx) {
+		void InitGraphcisResources(ID3D11Device * device, ID3D11DeviceContext * dctx) {
             m_dev = device;
             m_dctx = dctx;
             InitializeD3DResources();
         }
 
-        void InitializeD3DResources(void);
-
-        // List of color pixel formats supported by this app.
-        const std::vector<DXGI_FORMAT>& SupportedColorFormats() const;
-        const std::vector<DXGI_FORMAT>& SupportedDepthFormats() const;
-
-        int LoadPlyMesh(const std::wstring& plyPath);
-
-        int LoadTextureFromFile(const wchar_t* path);
+		int Load(const wchar_t *imagePath);
 
         // Render to swapchain images using stereo image array
         void RenderView(
@@ -38,7 +30,8 @@ namespace sample {
             ID3D11Texture2D* depthTexture) override;
 
     private:
-        TexturedMesh m_mesh;
+        static const int N_MESH = 2;
+        TexturedMesh m_meshes[N_MESH];
         ID3D11Device * m_dev = nullptr;
         ID3D11DeviceContext * m_dctx = nullptr;
         winrt::com_ptr<ID3D11VertexShader> m_vertexShader;
@@ -46,13 +39,10 @@ namespace sample {
         winrt::com_ptr<ID3D11InputLayout> m_inputLayout;
         winrt::com_ptr<ID3D11Buffer> m_modelCBuffer;
         winrt::com_ptr<ID3D11Buffer> m_viewProjectionCBuffer;
-        winrt::com_ptr<ID3D11Buffer> m_vb;
-        winrt::com_ptr<ID3D11Buffer> m_ib;
         winrt::com_ptr<ID3D11DepthStencilState> m_reversedZDepthNoStencilTest;
-        winrt::com_ptr<ID3D11Texture2D> m_tex;
-        winrt::com_ptr<ID3D11ShaderResourceView> m_srv;
         winrt::com_ptr<ID3D11SamplerState> m_sampler;
         winrt::com_ptr<ID3D11RasterizerState> m_rst;
-    };
+		void InitializeD3DResources(void);
+	};
 
 }; // namespace sample

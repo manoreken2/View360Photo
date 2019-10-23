@@ -184,13 +184,6 @@ namespace sample {
         CD3D11_DEPTH_STENCIL_VIEW_DESC depthStencilViewDesc(D3D11_DSV_DIMENSION_TEXTURE2DARRAY, depthSwapchainFormat);
         CHECK_HRCMD(m_dev->CreateDepthStencilView(depthTexture, &depthStencilViewDesc, depthStencilView.put()));
         const bool reversedZ = viewProjections[0].NearFar.Near > viewProjections[0].NearFar.Far;
-        /*
-        const float depthClearValue = reversedZ ? 0.f : 1.f;
-
-        // Clear swapchain and depth buffer. NOTE: This will clear the entire render target view, not just the specified view.
-        m_dctx->ClearRenderTargetView(renderTargetView.get(), renderTargetClearColor);
-        m_dctx->ClearDepthStencilView(depthStencilView.get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, depthClearValue, 0);
-        */
         m_dctx->OMSetDepthStencilState(reversedZ ? m_reversedZDepthNoStencilTest.get() : nullptr, 0);
 
         ID3D11RenderTargetView* renderTargets[] = {renderTargetView.get()};

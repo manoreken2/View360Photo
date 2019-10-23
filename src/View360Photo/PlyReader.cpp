@@ -6,7 +6,6 @@
 #include <assert.h>
 
 int PlyReader::Read(const std::wstring& path, TexturedMesh& tm_r) {
-    tm_r.Clear();
     mTM = &tm_r;
     mVtxProp = 0;
     mFaceProp = 0;
@@ -20,18 +19,18 @@ int PlyReader::Read(const std::wstring& path, TexturedMesh& tm_r) {
         return E_FAIL;
     }
 
-    int rv = Read1();
+    int hr = Read1();
 
     fclose(mFp);
     mFp = nullptr;
 
-    return rv;
+    return hr;
 }
 
 int
 PlyReader::Read1(void)
 {
-    int rv = 0;
+    int hr = 0;
     bool bDone = false;
     assert(mFp);
     assert(mTM);
@@ -40,21 +39,21 @@ PlyReader::Read1(void)
     while (!bDone) {
         switch (mState) {
         case ST_ReadSignature:
-            rv = ReadSignature();
+            hr = ReadSignature();
             break;
         case ST_ReadFormat:
-            rv = ReadFormat();
+            hr = ReadFormat();
             break;
         case ST_ReadHeader:
         case ST_ReadHeaderVtx:
         case ST_ReadHeaderFace:
-            rv = ReadHeader();
+            hr = ReadHeader();
             break;
         case ST_ReadVertex:
-            rv = ReadVertex();
+            hr = ReadVertex();
             break;
         case ST_ReadFace:
-            rv = ReadFace();
+            hr = ReadFace();
             break;
         case ST_Finish:
             bDone = true;
@@ -64,13 +63,13 @@ PlyReader::Read1(void)
             break;
         }
 
-        if (rv != S_OK) {
+        if (FAILED(hr)) {
             printf("E: PlyReader::Read1() failed.\n");
             break;
         }
     }
 
-    return rv;
+    return hr;
 }
 
 static char *

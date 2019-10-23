@@ -14,7 +14,8 @@ struct WH
     int h;
 };
 
-static int ExtractJpegToBGRA(const wchar_t * path, D3D11_SUBRESOURCE_DATA &srd_r, WH& wh_r) {
+/// @param portion 比率を0～1で指定。nullptrのとき全域をテクスチャーにする。
+static int ExtractJpegToBGRA(const wchar_t * path, const XrRect2Df *portion, D3D11_SUBRESOURCE_DATA &srd_r, WH& wh_r) {
     Gdiplus::BitmapData bd;
     Gdiplus::Bitmap* bm = new Gdiplus::Bitmap(path, TRUE);
     if (bm == nullptr || bm->GetLastStatus() != Gdiplus::Ok) {
@@ -22,10 +23,23 @@ static int ExtractJpegToBGRA(const wchar_t * path, D3D11_SUBRESOURCE_DATA &srd_r
         return E_FAIL;
     }
 
-    int w = bm->GetWidth();
-    int h = bm->GetHeight();
+    int origW = bm->GetWidth();
+    int origH = bm->GetHeight();
 
-    auto r = bm->LockBits(&Gdiplus::Rect(0, 0, w, h), Gdiplus::ImageLockModeWrite, PixelFormat32bppARGB, &bd);
+    auto origR = Gdiplus::Rect(0, 0, origW, origH);
+	auto cropR = origR;
+	if (portion != nullptr) {
+		cropR = Gdiplus::Rect(
+			(int)(portion->offset.x * origW),
+			(int)(portion->offset.y * origH),
+			(int)(portion->extent.width * origW),
+			(int)(portion->extent.height * origH)
+			);
+	}
+	int cropW = cropR.Width;
+	int cropH = cropR.Height;
+
+    auto r = bm->LockBits(&origR, Gdiplus::ImageLockModeWrite, PixelFormat32bppARGB, &bd);
     if (r != Gdiplus::Ok) {
         printf("Error: JpegToTexture::LoadFromFile(%S) failed %s\n", path, GdiplusStatusToStr(r));
         return E_FAIL;
@@ -33,19 +47,21 @@ static int ExtractJpegToBGRA(const wchar_t * path, D3D11_SUBRESOURCE_DATA &srd_r
 
     uint8_t* lockedMem = (uint8_t*)bd.Scan0;
 
-    uint8_t* rawBGRA = new uint8_t[(uint64_t)bd.Stride * h];
+    uint8_t* rawBGRA = new uint8_t[4 * cropW * cropH];
     srd_r.pSysMem = (void*)rawBGRA;
-    srd_r.SysMemPitch = bd.Stride;
+    srd_r.SysMemPitch = 4 * cropW;
     srd_r.SysMemSlicePitch = 0;
 
-    memcpy(rawBGRA, lockedMem, bd.Stride * h);
-
+	for (int y = 0; y < cropH; ++y) {
+		uint8_t *fromPos = lockedMem + cropR.X * 4 + bd.Stride * (y + cropR.Y);
+		memcpy(&rawBGRA[4 * cropW * y], fromPos, 4 * cropW);
+	}
     bm->UnlockBits(&bd);
 
     delete bm;
 
-    wh_r.w = w;
-    wh_r.h = h;
+    wh_r.w = cropW;
+    wh_r.h = cropH;
 
     return S_OK;
 }
@@ -104,7 +120,7 @@ CreateTextureFromMemory(
 }
 
 int
-JpegToTexture::LoadFromFile(
+JpegToTexture::ImageFileToTexture(
         ID3D11Device* device,
         ID3D11DeviceContext* dctx,
         const wchar_t* path,
@@ -113,16 +129,45 @@ JpegToTexture::LoadFromFile(
     D3D11_SUBRESOURCE_DATA srd;
     WH wh;
 
-    int rv = ExtractJpegToBGRA(path, srd, wh);
-    if (rv != S_OK) {
-        return rv;
+    int hr = ExtractJpegToBGRA(path, nullptr, srd, wh);
+    if (FAILED(hr)) {
+        return hr;
     }
 
-    rv = CreateTextureFromMemory(device, dctx, wh, srd, tex_r, srv_r);
-    if (rv != S_OK) {
-        return rv;
+    hr = CreateTextureFromMemory(device, dctx, wh, srd, tex_r, srv_r);
+    if (FAILED(hr)) {
+        return hr;
     }
 
     return S_OK;
 }
 
+int
+JpegToTexture::ImageFilePortionToTexture(
+        ID3D11Device* device,
+        ID3D11DeviceContext* dctx,
+        const wchar_t* path,
+        const XrRect2Df &portion,
+        ID3D11Texture2D** tex_r,
+        ID3D11ShaderResourceView** srv_r)
+{
+    D3D11_SUBRESOURCE_DATA srd;
+    WH wh;
+
+	assert(0.0f <= portion.offset.x);
+	assert(0.0f <= portion.offset.y);
+	assert(portion.offset.x + portion.extent.width <= 1.0f);
+	assert(portion.offset.y + portion.extent.height <= 1.0f);
+
+    int hr = ExtractJpegToBGRA(path, &portion, srd, wh);
+    if (FAILED(hr)) {
+        return hr;
+    }
+
+    hr = CreateTextureFromMemory(device, dctx, wh, srd, tex_r, srv_r);
+	if (FAILED(hr)) {
+		return hr;
+    }
+
+    return S_OK;
+}

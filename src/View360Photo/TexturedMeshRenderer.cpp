@@ -76,23 +76,56 @@ namespace TexturedMeshShader {
 } // namespace TexturedMeshShader
 
 namespace sample {
-    int TexturedMeshRenderer::LoadPlyMesh(const std::wstring& path) {
-        PlyReader pr;
-        int rv = pr.Read(path, m_mesh);
-        return rv;
-    }
+    int TexturedMeshRenderer::Load(const wchar_t *imagePath) {
+        int hr;
+        {
+            TexturedMesh &mesh = m_meshes[0];
+            mesh.Clear();
 
-    int TexturedMeshRenderer::LoadTextureFromFile(const wchar_t* path) {
-        if (m_tex.get() != nullptr) {
-            m_tex->Release();
+            PlyReader pr;
+            hr = pr.Read(L"sphereL.ply", mesh);
+            if (FAILED(hr)) {
+                return hr;
+            }
+
+            JpegToTexture jt;
+            XrRect2Df leftHalf{ 0, 0, 0.5f, 1.0f };
+            hr = jt.ImageFilePortionToTexture(m_dev, m_dctx, imagePath, leftHalf, (mesh.tex).put(), (mesh.srv).put());
+            if (FAILED(hr)) {
+                return hr;
+            }
         }
-        if (m_srv.get() != nullptr) {
-            m_srv->Release();
+        {
+            TexturedMesh &mesh = m_meshes[1];
+            mesh.Clear();
+
+            PlyReader pr;
+            hr = pr.Read(L"sphereR.ply", mesh);
+            if (FAILED(hr)) {
+                return hr;
+            }
+
+            JpegToTexture jt;
+            XrRect2Df rightHalf{ 0.5f, 0, 0.5f, 1.0f };
+            hr = jt.ImageFilePortionToTexture(m_dev, m_dctx, imagePath, rightHalf, (mesh.tex).put(), (mesh.srv).put());
+            if (FAILED(hr)) {
+                return hr;
+            }
         }
 
-        JpegToTexture jt;
-        int rv = jt.LoadFromFile(m_dev, m_dctx, path, m_tex.put(), m_srv.put());
-        return rv;
+		for (int i = 0; i < N_MESH; ++i) {
+			TexturedMesh &tm = m_meshes[i];
+			const D3D11_SUBRESOURCE_DATA vertexBufferData{ &tm.vertexList[0] };
+			const CD3D11_BUFFER_DESC vertexBufferDesc((uint32_t)(sizeof(XyzUv) * tm.vertexList.size()), D3D11_BIND_VERTEX_BUFFER);
+			CHECK_HRCMD(m_dev->CreateBuffer(&vertexBufferDesc, &vertexBufferData, tm.vb.put()));
+
+			// triangle index要素のサイズ(4バイト)は後でIASetIndexBuffer()で指定する。
+			const D3D11_SUBRESOURCE_DATA indexBufferData{ &tm.triangleIdxList[0] };
+			const CD3D11_BUFFER_DESC indexBufferDesc((uint32_t)(sizeof(uint32_t) * tm.triangleIdxList.size()), D3D11_BIND_INDEX_BUFFER);
+			CHECK_HRCMD(m_dev->CreateBuffer(&indexBufferDesc, &indexBufferData, tm.ib.put()));
+		}
+
+        return hr;
     }
 
     void TexturedMeshRenderer::InitializeD3DResources(void) {
@@ -122,15 +155,6 @@ namespace sample {
                                                                   D3D11_BIND_CONSTANT_BUFFER);
         CHECK_HRCMD(m_dev->CreateBuffer(&viewProjectionConstantBufferDesc, nullptr, m_viewProjectionCBuffer.put()));
 
-        const D3D11_SUBRESOURCE_DATA vertexBufferData{&m_mesh.vertexList[0]};
-        const CD3D11_BUFFER_DESC vertexBufferDesc((uint32_t)(sizeof(XyzUv) * m_mesh.vertexList.size()), D3D11_BIND_VERTEX_BUFFER);
-        CHECK_HRCMD(m_dev->CreateBuffer(&vertexBufferDesc, &vertexBufferData, m_vb.put()));
-
-        // triangle index要素のサイズ(4バイト)は後でIASetIndexBuffer()で指定する。
-        const D3D11_SUBRESOURCE_DATA indexBufferData{&m_mesh.triangleIdxList[0]};
-        const CD3D11_BUFFER_DESC indexBufferDesc((uint32_t)(sizeof(uint32_t) * m_mesh.triangleIdxList.size()), D3D11_BIND_INDEX_BUFFER);
-        CHECK_HRCMD(m_dev->CreateBuffer(&indexBufferDesc, &indexBufferData, m_ib.put()));
-
         D3D11_FEATURE_DATA_D3D11_OPTIONS3 options;
         m_dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS3, &options, sizeof(options));
         CHECK_MSG(options.VPAndRTArrayIndexFromAnyShaderFeedingRasterizer,
@@ -144,9 +168,9 @@ namespace sample {
 
         D3D11_SAMPLER_DESC sampDesc = {};
         sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-        sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-        sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-        sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+        sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+        sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
         sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
         sampDesc.MinLOD = 0;
         sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
@@ -164,26 +188,6 @@ namespace sample {
         rasterDesc.ScissorEnable = FALSE;
         rasterDesc.SlopeScaledDepthBias = 0.0f;
         CHECK_HRCMD(m_dev->CreateRasterizerState(&rasterDesc, m_rst.put()));
-    }
-
-    const std::vector<DXGI_FORMAT>& TexturedMeshRenderer::SupportedColorFormats() const {
-        const static std::vector<DXGI_FORMAT> SupportedColorFormats = {
-            DXGI_FORMAT_R8G8B8A8_UNORM,
-            DXGI_FORMAT_B8G8R8A8_UNORM,
-            DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
-            DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,
-        };
-        return SupportedColorFormats;
-    }
-
-    const std::vector<DXGI_FORMAT>& TexturedMeshRenderer::SupportedDepthFormats() const {
-        const static std::vector<DXGI_FORMAT> SupportedDepthFormats = {
-            DXGI_FORMAT_D32_FLOAT,
-            DXGI_FORMAT_D16_UNORM,
-            DXGI_FORMAT_D24_UNORM_S8_UINT,
-            DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
-        };
-        return SupportedDepthFormats;
     }
 
     void TexturedMeshRenderer::RenderView(
@@ -213,13 +217,6 @@ namespace sample {
         CHECK_HRCMD(m_dev->CreateDepthStencilView(depthTexture, &depthStencilViewDesc, depthStencilView.put()));
 
         const bool reversedZ = viewProjections[0].NearFar.Near > viewProjections[0].NearFar.Far;
-        /*
-        const float depthClearValue = reversedZ ? 0.f : 1.f;
-
-        // Clear swapchain and depth buffer. NOTE: This will clear the entire render target view, not just the specified view.
-        m_dctx->ClearRenderTargetView(renderTargetView.get(), renderTargetClearColor);
-        m_dctx->ClearDepthStencilView(depthStencilView.get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, depthClearValue, 0);
-        */
         m_dctx->OMSetDepthStencilState(reversedZ ? m_reversedZDepthNoStencilTest.get() : nullptr, 0);
 
         ID3D11RenderTargetView* renderTargets[] = {renderTargetView.get()};
@@ -229,11 +226,6 @@ namespace sample {
         m_dctx->VSSetConstantBuffers(0, (UINT)std::size(constantBuffers), constantBuffers);
         m_dctx->VSSetShader(m_vertexShader.get(), nullptr, 0);
         m_dctx->PSSetShader(m_pixelShader.get(), nullptr, 0);
-
-        ID3D11ShaderResourceView* srv = m_srv.get();
-        ID3D11SamplerState* ss = m_sampler.get();
-        m_dctx->PSSetShaderResources(0, 1, &srv);
-        m_dctx->PSSetSamplers(0, 1, &ss);
 
         TexturedMeshShader::ViewProjectionConstantBuffer vpcb;
 
@@ -247,16 +239,10 @@ namespace sample {
         }
         m_dctx->UpdateSubresource(m_viewProjectionCBuffer.get(), 0, nullptr, &vpcb, 0, 0);
 
-        // Set cube primitive data.
-        const UINT strides[] = {sizeof(TexturedMeshShader::Vertex)};
-        const UINT offsets[] = {0};
-        ID3D11Buffer* vertexBuffers[] = {m_vb.get()};
-        m_dctx->IASetVertexBuffers(0, (UINT)std::size(vertexBuffers), vertexBuffers, strides, offsets);
-        m_dctx->IASetIndexBuffer(m_ib.get(), DXGI_FORMAT_R32_UINT, 0);
-        m_dctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        m_dctx->IASetInputLayout(m_inputLayout.get());
-
         m_dctx->RSSetState(m_rst.get());
+        ID3D11SamplerState* ss = m_sampler.get();
+        m_dctx->PSSetSamplers(0, 1, &ss);
+        m_dctx->IASetInputLayout(m_inputLayout.get());
 
         {
             XrPosef pose;
@@ -270,9 +256,24 @@ namespace sample {
             const DirectX::XMMATRIX scaleMatrix = DirectX::XMMatrixScaling(scale, scale, scale);
             DirectX::XMStoreFloat4x4(&model.Model, DirectX::XMMatrixTranspose(scaleMatrix * xr::math::LoadXrPose(pose)));
             m_dctx->UpdateSubresource(m_modelCBuffer.get(), 0, nullptr, &model, 0, 0);
+        }
+
+        for (int i = 0; i < N_MESH; ++i) {
+            TexturedMesh &tm = m_meshes[i];
+
+            // Set primitive data.
+            ID3D11ShaderResourceView* srv = tm.srv.get();
+            m_dctx->PSSetShaderResources(0, 1, &srv);
+
+            const UINT strides[] = { sizeof(TexturedMeshShader::Vertex) };
+            const UINT offsets[] = { 0 };
+            ID3D11Buffer* vertexBuffers[] = { tm.vb.get() };
+            m_dctx->IASetVertexBuffers(0, (UINT)std::size(vertexBuffers), vertexBuffers, strides, offsets);
+            m_dctx->IASetIndexBuffer(tm.ib.get(), DXGI_FORMAT_R32_UINT, 0);
+            m_dctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
             // Draw.
-            m_dctx->DrawIndexedInstanced((uint32_t)(m_mesh.triangleIdxList.size()), viewInstanceCount, 0, 0, 0);
+            m_dctx->DrawIndexedInstanced((uint32_t)(tm.triangleIdxList.size()), viewInstanceCount, 0, 0, 0);
         }
     }
 
