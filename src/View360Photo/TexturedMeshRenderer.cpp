@@ -172,6 +172,7 @@ namespace sample {
         sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
         sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
         sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+		sampDesc.MipLODBias = 0; //< 4等にすると、ボケボケになり、Mipmapが行われていることを確認できる。
         sampDesc.MinLOD = 0;
         sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
         CHECK_HRCMD(m_dev->CreateSamplerState(&sampDesc, m_sampler.put()));

@@ -68,30 +68,23 @@ static int ExtractJpegToBGRA(const wchar_t * path, const XrRect2Df *portion, D3D
 
 static int
 CreateTextureFromMemory(
-        ID3D11Device* d3dDevice,
+        ID3D11Device* dev,
         ID3D11DeviceContext*  dctx,
         const WH& wh_in,
         D3D11_SUBRESOURCE_DATA &srd_in,
         ID3D11Texture2D** tex_r,
         ID3D11ShaderResourceView **srv_r)
 {
+	HRESULT hr;
     assert(tex_r != nullptr);
     assert(srv_r != nullptr);
 
-    D3D11_TEXTURE2D_DESC desc = {};
-    desc.Width = static_cast<UINT>(wh_in.w);
-    desc.Height = static_cast<UINT>(wh_in.h);
-    desc.MipLevels = static_cast<UINT>(1);
-    desc.ArraySize = static_cast<UINT>(1);
-    desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    desc.SampleDesc.Count = 1;
-    desc.SampleDesc.Quality = 0;
-    desc.Usage = D3D11_USAGE_IMMUTABLE;
-    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-    desc.CPUAccessFlags = 0;
-    desc.MiscFlags = 0;
-    
-    HRESULT hr = d3dDevice->CreateTexture2D(&desc, &srd_in, tex_r);
+	D3D11_TEXTURE2D_DESC desc = CD3D11_TEXTURE2D_DESC(DXGI_FORMAT_B8G8R8A8_UNORM, wh_in.w, wh_in.h);
+	desc.MipLevels = 0;
+	desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+	desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
+
+    hr = dev->CreateTexture2D(&desc, nullptr, tex_r);
     if (FAILED(hr)) {
         printf("E: CreateTextureFromMemory() d3dDevice->CreateTexture2D() failed %x\n", hr);
         return hr;
@@ -101,12 +94,15 @@ CreateTextureFromMemory(
         return E_FAIL;
     }
 
-    D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc = {};
-    SRVDesc.Format = desc.Format;
-    SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-    SRVDesc.Texture2D.MipLevels = desc.MipLevels;
+	dctx->UpdateSubresource(*tex_r, 0, nullptr, srd_in.pSysMem, srd_in.SysMemPitch, 0);
 
-    hr = d3dDevice->CreateShaderResourceView(*tex_r, &SRVDesc, srv_r);
+    D3D11_SHADER_RESOURCE_VIEW_DESC sd = {};
+    sd.Format = desc.Format;
+    sd.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+	sd.Texture2D.MipLevels = -1;
+	sd.Texture2D.MostDetailedMip = 0;
+
+    hr = dev->CreateShaderResourceView(*tex_r, &sd, srv_r);
     if (FAILED(hr)) {
         (*tex_r)->Release();
         printf("E: CreateTextureFromMemory() d3dDevice->CreateShaderResourceView() failed %x\n", hr);
