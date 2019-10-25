@@ -49,7 +49,7 @@ private:
         VPT_XYZ_NXNYNZ_ST,
         VPT_XYZ_ST,
     };
-    VtxPropType mVtxPropType;
+    VtxPropType mVtxPropType = VPT_Unknown;
 
 
     int Read1(void);
