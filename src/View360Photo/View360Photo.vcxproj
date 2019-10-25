@@ -92,6 +92,7 @@
     </ClCompile>
     <ClCompile Include="PlyReader.cpp" />
     <ClCompile Include="TexturedMeshRenderer.cpp" />
+    <ClInclude Include="Config.h" />
     <ClInclude Include="Cube.h" />
     <ClInclude Include="CubeRenderer.h" />
     <ClInclude Include="GdiplusHousekeeping.h" />

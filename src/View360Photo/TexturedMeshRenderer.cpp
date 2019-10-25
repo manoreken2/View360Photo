@@ -21,6 +21,7 @@
 #include "DxUtility.h"
 #include "PlyReader.h"
 #include "JpegToTexture.h"
+#include "Config.h"
 
 namespace TexturedMeshShader {
     struct Vertex {
@@ -78,7 +79,12 @@ namespace TexturedMeshShader {
 namespace sample {
     int TexturedMeshRenderer::Load(const wchar_t *imagePath) {
         int hr;
-        {
+#if NUM_INTERPOLATE == 1
+		const uint8_t alpha = 0xff;
+#else
+		const uint8_t alpha = 0x100 / NUM_INTERPOLATE;
+#endif
+		{
             TexturedMesh &mesh = m_meshes[0];
             mesh.Clear();
 
@@ -90,7 +96,7 @@ namespace sample {
 
             JpegToTexture jt;
             XrRect2Df leftHalf{ 0, 0, 0.5f, 1.0f };
-            hr = jt.ImageFilePortionToTexture(m_dev, m_dctx, imagePath, leftHalf, (mesh.tex).put(), (mesh.srv).put());
+            hr = jt.ImageFileToTexture(m_dev, m_dctx, imagePath, leftHalf, (mesh.tex).put(), (mesh.srv).put(), alpha);
             if (FAILED(hr)) {
                 return hr;
             }
@@ -107,7 +113,7 @@ namespace sample {
 
             JpegToTexture jt;
             XrRect2Df rightHalf{ 0.5f, 0, 0.5f, 1.0f };
-            hr = jt.ImageFilePortionToTexture(m_dev, m_dctx, imagePath, rightHalf, (mesh.tex).put(), (mesh.srv).put());
+            hr = jt.ImageFileToTexture(m_dev, m_dctx, imagePath, rightHalf, (mesh.tex).put(), (mesh.srv).put(), alpha);
             if (FAILED(hr)) {
                 return hr;
             }
@@ -129,66 +135,94 @@ namespace sample {
     }
 
     void TexturedMeshRenderer::InitializeD3DResources(void) {
-        const winrt::com_ptr<ID3DBlob> vertexShaderBytes = sample::dx::CompileShader(TexturedMeshShader::ShaderHlsl, "MainVS", "vs_5_0");
-        CHECK_HRCMD(m_dev->CreateVertexShader(
-            vertexShaderBytes->GetBufferPointer(), vertexShaderBytes->GetBufferSize(), nullptr, m_vertexShader.put()));
+		{
+			const winrt::com_ptr<ID3DBlob> vertexShaderBytes = sample::dx::CompileShader(TexturedMeshShader::ShaderHlsl, "MainVS", "vs_5_0");
+			CHECK_HRCMD(m_dev->CreateVertexShader(
+				vertexShaderBytes->GetBufferPointer(), vertexShaderBytes->GetBufferSize(), nullptr, m_vertexShader.put()));
 
-        const winrt::com_ptr<ID3DBlob> pixelShaderBytes = sample::dx::CompileShader(TexturedMeshShader::ShaderHlsl, "MainPS", "ps_5_0");
-        CHECK_HRCMD(m_dev->CreatePixelShader(
-            pixelShaderBytes->GetBufferPointer(), pixelShaderBytes->GetBufferSize(), nullptr, m_pixelShader.put()));
+			const winrt::com_ptr<ID3DBlob> pixelShaderBytes = sample::dx::CompileShader(TexturedMeshShader::ShaderHlsl, "MainPS", "ps_5_0");
+			CHECK_HRCMD(m_dev->CreatePixelShader(
+				pixelShaderBytes->GetBufferPointer(), pixelShaderBytes->GetBufferSize(), nullptr, m_pixelShader.put()));
 
-        const D3D11_INPUT_ELEMENT_DESC vertexDesc[] = {
-            {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        };
+			const D3D11_INPUT_ELEMENT_DESC vertexDesc[] = {
+				{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+			};
 
-        CHECK_HRCMD(m_dev->CreateInputLayout(vertexDesc,
-                                                (UINT)std::size(vertexDesc),
-                                                vertexShaderBytes->GetBufferPointer(),
-                                                vertexShaderBytes->GetBufferSize(),
-                                                m_inputLayout.put()));
+			CHECK_HRCMD(m_dev->CreateInputLayout(vertexDesc,
+													(UINT)std::size(vertexDesc),
+													vertexShaderBytes->GetBufferPointer(),
+													vertexShaderBytes->GetBufferSize(),
+													m_inputLayout.put()));
+		}
 
-        const CD3D11_BUFFER_DESC modelConstantBufferDesc(sizeof(TexturedMeshShader::ModelConstantBuffer), D3D11_BIND_CONSTANT_BUFFER);
-        CHECK_HRCMD(m_dev->CreateBuffer(&modelConstantBufferDesc, nullptr, m_modelCBuffer.put()));
+		{
+			const CD3D11_BUFFER_DESC modelConstantBufferDesc(sizeof(TexturedMeshShader::ModelConstantBuffer), D3D11_BIND_CONSTANT_BUFFER);
+			CHECK_HRCMD(m_dev->CreateBuffer(&modelConstantBufferDesc, nullptr, m_modelCBuffer.put()));
+		}
 
-        const CD3D11_BUFFER_DESC viewProjectionConstantBufferDesc(sizeof(TexturedMeshShader::ViewProjectionConstantBuffer),
-                                                                  D3D11_BIND_CONSTANT_BUFFER);
-        CHECK_HRCMD(m_dev->CreateBuffer(&viewProjectionConstantBufferDesc, nullptr, m_viewProjectionCBuffer.put()));
+		{
+			const CD3D11_BUFFER_DESC viewProjectionConstantBufferDesc(sizeof(TexturedMeshShader::ViewProjectionConstantBuffer),
+																	  D3D11_BIND_CONSTANT_BUFFER);
+			CHECK_HRCMD(m_dev->CreateBuffer(&viewProjectionConstantBufferDesc, nullptr, m_viewProjectionCBuffer.put()));
+		}
 
-        D3D11_FEATURE_DATA_D3D11_OPTIONS3 options;
-        m_dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS3, &options, sizeof(options));
-        CHECK_MSG(options.VPAndRTArrayIndexFromAnyShaderFeedingRasterizer,
-                  "This sample requires VPRT support. Adjust sample shaders on GPU without VRPT.");
+		{
+			D3D11_FEATURE_DATA_D3D11_OPTIONS3 options;
+			m_dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS3, &options, sizeof(options));
+			CHECK_MSG(options.VPAndRTArrayIndexFromAnyShaderFeedingRasterizer,
+					  "This sample requires VPRT support. Adjust sample shaders on GPU without VRPT.");
+		}
 
-        CD3D11_DEPTH_STENCIL_DESC depthStencilDesc(CD3D11_DEFAULT{});
-        depthStencilDesc.DepthEnable = true;
-        depthStencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
-        depthStencilDesc.DepthFunc = D3D11_COMPARISON_GREATER;
-        CHECK_HRCMD(m_dev->CreateDepthStencilState(&depthStencilDesc, m_reversedZDepthNoStencilTest.put()));
+		{
+			CD3D11_DEPTH_STENCIL_DESC dsd(CD3D11_DEFAULT{});
+			dsd.DepthEnable = FALSE;
+			dsd.StencilEnable = FALSE;
+			CHECK_HRCMD(m_dev->CreateDepthStencilState(&dsd, m_noZtestState.put()));
+		}
 
-        D3D11_SAMPLER_DESC sampDesc = {};
-        sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-        sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
-        sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
-        sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-        sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-		sampDesc.MipLODBias = 0; //< 4等にすると、ボケボケになり、Mipmapが行われていることを確認できる。
-        sampDesc.MinLOD = 0;
-        sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
-        CHECK_HRCMD(m_dev->CreateSamplerState(&sampDesc, m_sampler.put()));
+		{
+			D3D11_SAMPLER_DESC sampDesc = {};
+			sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR; // D3D11_FILTER_MIN_MAG_MIP_POINT; // ;
+			sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+			sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+			sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+			sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+			sampDesc.MipLODBias = 0; //< 4等にすると、ボケボケになり、Mipmapが行われていることを確認できる。
+			sampDesc.MinLOD = 0;
+			sampDesc.MaxLOD = 0; // D3D11_FLOAT32_MAX; //< 0にすると、最も精細なテクスチャーだけが使用される。
+			CHECK_HRCMD(m_dev->CreateSamplerState(&sampDesc, m_sampler.put()));
+		}
 
-        D3D11_RASTERIZER_DESC rasterDesc;
-        rasterDesc.AntialiasedLineEnable = FALSE;
-        rasterDesc.CullMode = D3D11_CULL_NONE;
-        rasterDesc.DepthBias = 0;
-        rasterDesc.DepthBiasClamp = 0.0f;
-        rasterDesc.DepthClipEnable = TRUE;
-        rasterDesc.FillMode = D3D11_FILL_SOLID;
-        rasterDesc.FrontCounterClockwise = FALSE;
-        rasterDesc.MultisampleEnable = FALSE;
-        rasterDesc.ScissorEnable = FALSE;
-        rasterDesc.SlopeScaledDepthBias = 0.0f;
-        CHECK_HRCMD(m_dev->CreateRasterizerState(&rasterDesc, m_rst.put()));
+		{
+			D3D11_RASTERIZER_DESC rasterDesc;
+			rasterDesc.FillMode = D3D11_FILL_SOLID;
+			rasterDesc.CullMode = D3D11_CULL_NONE;
+			rasterDesc.FrontCounterClockwise = FALSE;
+			rasterDesc.DepthBias = 0;
+			rasterDesc.DepthBiasClamp = 0.0f;
+			rasterDesc.SlopeScaledDepthBias = 0.0f;
+			rasterDesc.DepthClipEnable = TRUE;
+			rasterDesc.ScissorEnable = FALSE;
+			rasterDesc.MultisampleEnable = FALSE;
+			rasterDesc.AntialiasedLineEnable = FALSE;
+			CHECK_HRCMD(m_dev->CreateRasterizerState(&rasterDesc, m_rst.put()));
+		}
+
+		{
+			D3D11_BLEND_DESC bd;
+			memset(&bd, 0, sizeof bd);
+			bd.RenderTarget[0].BlendEnable = TRUE;
+			bd.RenderTarget[0].RenderTargetWriteMask = 0x0f;
+			bd.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+			bd.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+			bd.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
+			bd.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+			bd.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
+			bd.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+
+			CHECK_HRCMD(m_dev->CreateBlendState(&bd, m_addBlend.put()));
+		}
     }
 
     void TexturedMeshRenderer::RenderView(
@@ -218,17 +252,19 @@ namespace sample {
         CHECK_HRCMD(m_dev->CreateDepthStencilView(depthTexture, &depthStencilViewDesc, depthStencilView.put()));
 
         const bool reversedZ = viewProjections[0].NearFar.Near > viewProjections[0].NearFar.Far;
-        m_dctx->OMSetDepthStencilState(reversedZ ? m_reversedZDepthNoStencilTest.get() : nullptr, 0);
+        m_dctx->OMSetDepthStencilState(m_noZtestState.get(), 0);
 
         ID3D11RenderTargetView* renderTargets[] = {renderTargetView.get()};
         m_dctx->OMSetRenderTargets((UINT)std::size(renderTargets), renderTargets, depthStencilView.get());
+
+		m_dctx->OMSetBlendState(m_addBlend.get(), nullptr, 0xffffff);
 
         ID3D11Buffer* const constantBuffers[] = {m_modelCBuffer.get(), m_viewProjectionCBuffer.get()};
         m_dctx->VSSetConstantBuffers(0, (UINT)std::size(constantBuffers), constantBuffers);
         m_dctx->VSSetShader(m_vertexShader.get(), nullptr, 0);
         m_dctx->PSSetShader(m_pixelShader.get(), nullptr, 0);
 
-        TexturedMeshShader::ViewProjectionConstantBuffer vpcb;
+		TexturedMeshShader::ViewProjectionConstantBuffer vpcb = {};
 
         for (uint32_t k = 0; k < viewInstanceCount; k++) {
             const DirectX::XMMATRIX spaceToView = xr::math::LoadInvertedXrPose(viewProjections[k].Pose);

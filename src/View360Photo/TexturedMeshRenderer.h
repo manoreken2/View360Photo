@@ -39,9 +39,10 @@ namespace sample {
         winrt::com_ptr<ID3D11InputLayout> m_inputLayout;
         winrt::com_ptr<ID3D11Buffer> m_modelCBuffer;
         winrt::com_ptr<ID3D11Buffer> m_viewProjectionCBuffer;
-        winrt::com_ptr<ID3D11DepthStencilState> m_reversedZDepthNoStencilTest;
+        winrt::com_ptr<ID3D11DepthStencilState> m_noZtestState;
         winrt::com_ptr<ID3D11SamplerState> m_sampler;
         winrt::com_ptr<ID3D11RasterizerState> m_rst;
+		winrt::com_ptr<ID3D11BlendState> m_addBlend;
 		void InitializeD3DResources(void);
 	};
 

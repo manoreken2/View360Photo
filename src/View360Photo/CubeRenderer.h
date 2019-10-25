@@ -38,7 +38,9 @@ namespace sample {
         winrt::com_ptr<ID3D11Buffer> m_viewProjectionCBuffer;
         winrt::com_ptr<ID3D11Buffer> m_cubeVertexBuffer;
         winrt::com_ptr<ID3D11Buffer> m_cubeIndexBuffer;
-        winrt::com_ptr<ID3D11DepthStencilState> m_reversedZDepthNoStencilTest;
+        winrt::com_ptr<ID3D11DepthStencilState> m_reversedZTestState;
+		winrt::com_ptr<ID3D11DepthStencilState> m_normalZTestState;
+		winrt::com_ptr<ID3D11BlendState> m_bs;
 
         void InitializeD3DResources(void);
     };

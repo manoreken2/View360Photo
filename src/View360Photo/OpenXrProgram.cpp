@@ -22,6 +22,8 @@
 #include "CubeRenderer.h"
 #include "JpegToTexture.h"
 #include "TexturedMeshRenderer.h"
+#include <DirectXMath.h>
+#include "Config.h"
 
 namespace {
     struct ImplementOpenXrProgram : sample::IOpenXrProgram {
@@ -235,7 +237,19 @@ namespace {
             // Choose a reasonable depth range can help improve hologram visual quality.
             // Use reversed Z (near > far) for more uniformed Z resolution.
             m_nearFar = {20.f, 0.1f};
-        }
+
+			for (uint32_t i=0; i<NUM_VIEWS; ++i) {
+				XrPosef pose;
+				pose.orientation.x = 0;
+				pose.orientation.y = 0;
+				pose.orientation.z = 0;
+				pose.orientation.w = 1;
+				pose.position.x = 0;
+				pose.position.y = 0;
+				pose.position.z = 0;
+				m_prevPoses[i] = pose;
+			}
+		}
 
         void InitializeDevice(LUID adapterLuid, const std::vector<D3D_FEATURE_LEVEL>& featureLevels) {
             const winrt::com_ptr<IDXGIAdapter1> adapter = sample::dx::GetAdapter(adapterLuid);
@@ -275,6 +289,9 @@ namespace {
             m_tmr.InitGraphcisResources(device, dctx);
 			
 			hr = m_tmr.Load(L"360.jpg");
+			if (FAILED(hr)) {
+				return hr;
+			}
 
             XrGraphicsBindingD3D11KHR graphicsBinding{XR_TYPE_GRAPHICS_BINDING_D3D11_KHR};
             graphicsBinding.device = device;
@@ -416,23 +433,23 @@ namespace {
             const uint32_t textureArraySize = viewCount;
             m_renderResources->ColorSwapchain =
                 CreateSwapchainD3D11(m_session.Get(),
-                                     colorSwapchainFormat,
-                                     view.recommendedImageRectWidth,
-                                     view.recommendedImageRectHeight,
-                                     textureArraySize,
-                                     view.recommendedSwapchainSampleCount,
-                                     0,
-                                     XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT);
+                    colorSwapchainFormat,
+					view.maxImageRectWidth, // view.recommendedImageRectWidth, // 
+					view.maxImageRectHeight, // view.recommendedImageRectHeight, // 
+                    textureArraySize,
+                    view.recommendedSwapchainSampleCount, // view.maxSwapchainSampleCount,
+                    0,
+                    XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT);
 
             m_renderResources->DepthSwapchain =
                 CreateSwapchainD3D11(m_session.Get(),
-                                     depthSwapchainFormat,
-                                     view.recommendedImageRectWidth,
-                                     view.recommendedImageRectHeight,
-                                     textureArraySize,
-                                     view.recommendedSwapchainSampleCount,
-                                     0,
-                                     XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+                    depthSwapchainFormat,
+					view.maxImageRectWidth, // view.recommendedImageRectWidth, // 
+					view.maxImageRectHeight, // view.recommendedImageRectHeight, // 
+					textureArraySize,
+					view.recommendedSwapchainSampleCount, //view.maxSwapchainSampleCount,
+					0,
+					XR_SWAPCHAIN_USAGE_SAMPLED_BIT | XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
 
             // Preallocate view buffers for xrLocateViews later inside frame loop.
             m_renderResources->Views.resize(viewCount, {XR_TYPE_VIEW});
@@ -703,12 +720,17 @@ namespace {
 
         void ClearColorDepth(
                 const XrRect2Di& imageRect,
-                const float renderTargetClearColor[4],
-                const std::vector<xr::math::ViewProjection>& viewProjections,
                 DXGI_FORMAT colorSwapchainFormat,
                 ID3D11Texture2D* colorTexture,
                 DXGI_FORMAT depthSwapchainFormat,
                 ID3D11Texture2D* depthTexture) {
+			// For Hololens additive display, best to clear render target with transparent black color (0,0,0,0)
+			constexpr DirectX::XMVECTORF32 opaqueColor = { 0.0f, 0.0f, 0.0f, 1.0f };
+			constexpr DirectX::XMVECTORF32 transparent = { 0.0f, 0.0f, 0.0f, 0.0f };
+			const DirectX::XMVECTORF32 renderTargetClearColor =
+				(m_environmentBlendMode == XR_ENVIRONMENT_BLEND_MODE_OPAQUE) ? opaqueColor : transparent;
+
+
             CD3D11_VIEWPORT viewport(
                 (float)imageRect.offset.x, (float)imageRect.offset.y, (float)imageRect.extent.width, (float)imageRect.extent.height);
             m_dctx->RSSetViewports(1, &viewport);
@@ -723,13 +745,29 @@ namespace {
             CD3D11_DEPTH_STENCIL_VIEW_DESC depthStencilViewDesc(D3D11_DSV_DIMENSION_TEXTURE2DARRAY, depthSwapchainFormat);
             CHECK_HRCMD(m_dev->CreateDepthStencilView(depthTexture, &depthStencilViewDesc, depthStencilView.put()));
 
-            const bool reversedZ = viewProjections[0].NearFar.Near > viewProjections[0].NearFar.Far;
-            const float depthClearValue = reversedZ ? 0.f : 1.f;
+            const float depthClearValue = m_reversedZ ? 0.f : 1.f;
 
             // Clear swapchain and depth buffer. NOTE: This will clear the entire render target view, not just the specified view.
             m_dctx->ClearRenderTargetView(renderTargetView.get(), renderTargetClearColor);
             m_dctx->ClearDepthStencilView(depthStencilView.get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, depthClearValue, 0);
         }
+
+		/// @param ratio 0 (result = a) to 1 (result =b)
+		static XrPosef
+		PoseInterpolate(XrPosef &a, XrPosef &b, const float ratio) {
+			XrPosef r;
+			r.position.x = (1.0f - ratio) * a.position.x + ratio * b.position.x;
+			r.position.y = (1.0f - ratio) * a.position.y + ratio * b.position.y;
+			r.position.z = (1.0f - ratio) * a.position.z + ratio * b.position.z;
+			auto q0 = DirectX::XMVectorSet(a.orientation.x, a.orientation.y, a.orientation.z, a.orientation.w);
+			auto q1 = DirectX::XMVectorSet(b.orientation.x, b.orientation.y, b.orientation.z, b.orientation.w);
+			auto qR = DirectX::XMQuaternionSlerp(q0, q1, ratio);
+			r.orientation.x = DirectX::XMVectorGetX(qR);
+			r.orientation.y = DirectX::XMVectorGetY(qR);
+			r.orientation.z = DirectX::XMVectorGetZ(qR);
+			r.orientation.w = DirectX::XMVectorGetW(qR);
+			return r;
+		}
 
         bool RenderLayer(XrTime predictedDisplayTime, XrCompositionLayerProjection& layer) {
             // The output view count of xrLocateViews is always same as xrEnumerateViewConfigurationViews
@@ -754,29 +792,25 @@ namespace {
                 return false;
             }
 
-            std::vector<const sample::Cube*> visibleCubes;
+			{
+				m_visibleCubes.clear();
+				auto UpdateVisibleCube = [&](sample::Cube& cube) {
+					if (cube.Space.Get() != XR_NULL_HANDLE) {
+						XrSpaceLocation spaceLocation{XR_TYPE_SPACE_LOCATION};
+						CHECK_XRCMD(xrLocateSpace(cube.Space.Get(), m_sceneSpace.Get(), predictedDisplayTime, &spaceLocation));
 
-            auto UpdateVisibleCube = [&](sample::Cube& cube) {
-                if (cube.Space.Get() != XR_NULL_HANDLE) {
-                    XrSpaceLocation spaceLocation{XR_TYPE_SPACE_LOCATION};
-                    CHECK_XRCMD(xrLocateSpace(cube.Space.Get(), m_sceneSpace.Get(), predictedDisplayTime, &spaceLocation));
+						// Update cubes location with latest space relation
+						if (xr::math::Pose::IsPoseValid(spaceLocation)) {
+							cube.Pose = spaceLocation.pose;
+							m_visibleCubes.push_back(&cube);
+						}
+					}
+				};
 
-                    // Update cubes location with latest space relation
-                    if (xr::math::Pose::IsPoseValid(spaceLocation)) {
-                        cube.Pose = spaceLocation.pose;
-                        visibleCubes.push_back(&cube);
-                    }
-                }
-            };
-
-            UpdateVisibleCube(m_cubesInHand[LeftSide]);
-            UpdateVisibleCube(m_cubesInHand[RightSide]);
-
-            /*
-            for (auto& hologram : m_holograms) {
-                UpdateVisibleCube(hologram.Cube);
-            }
-            */
+				UpdateVisibleCube(m_cubesInHand[LeftSide]);
+				UpdateVisibleCube(m_cubesInHand[RightSide]);
+				m_cubeGraphics->SetCubes(m_visibleCubes);
+			}
 
             m_renderResources->ProjectionLayerViews.resize(viewCountOutput);
             if (m_optionalExtensions.DepthExtensionSupported) {
@@ -795,56 +829,86 @@ namespace {
             const uint32_t colorSwapchainImageIndex = AquireAndWaitForSwapchainImage(colorSwapchain.Handle.Get());
             const uint32_t depthSwapchainImageIndex = AquireAndWaitForSwapchainImage(depthSwapchain.Handle.Get());
 
-            // Prepare rendering parameters of each view for swapchain texture arrays
-            std::vector<xr::math::ViewProjection> viewProjections(viewCountOutput);
-            for (uint32_t i = 0; i < viewCountOutput; i++) {
-                viewProjections[i] = {m_renderResources->Views[i].pose, m_renderResources->Views[i].fov, m_nearFar};
+			CHECK(NUM_VIEWS == viewCountOutput);
+			std::vector<xr::math::ViewProjection> viewProjections(viewCountOutput);
+			for (uint32_t i = 0; i < viewCountOutput; i++) {
+				viewProjections[i] = { m_renderResources->Views[i].pose, m_renderResources->Views[i].fov, m_nearFar };
+				m_curPoses[i] = m_renderResources->Views[i].pose;
+			}
+			m_reversedZ = viewProjections[0].NearFar.Near > viewProjections[0].NearFar.Far;
 
-                m_renderResources->ProjectionLayerViews[i] = {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW};
-                m_renderResources->ProjectionLayerViews[i].pose = m_renderResources->Views[i].pose;
-                m_renderResources->ProjectionLayerViews[i].fov = m_renderResources->Views[i].fov;
-                m_renderResources->ProjectionLayerViews[i].subImage.swapchain = colorSwapchain.Handle.Get();
-                m_renderResources->ProjectionLayerViews[i].subImage.imageRect = imageRect;
-                m_renderResources->ProjectionLayerViews[i].subImage.imageArrayIndex = i;
+			// 描画の準備ができた。画面とデプスをクリアー。
+			ClearColorDepth(imageRect,
+				colorSwapchain.Format,
+				colorSwapchain.Images[colorSwapchainImageIndex].texture,
+				depthSwapchain.Format,
+				depthSwapchain.Images[depthSwapchainImageIndex].texture);
 
-                if (m_optionalExtensions.DepthExtensionSupported) {
-                    m_renderResources->DepthInfoViews[i] = {XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR};
-                    m_renderResources->DepthInfoViews[i].minDepth = 0;
-                    m_renderResources->DepthInfoViews[i].maxDepth = 1;
-                    m_renderResources->DepthInfoViews[i].nearZ = m_nearFar.Near;
-                    m_renderResources->DepthInfoViews[i].farZ = m_nearFar.Far;
-                    m_renderResources->DepthInfoViews[i].subImage.swapchain = depthSwapchain.Handle.Get();
-                    m_renderResources->DepthInfoViews[i].subImage.imageRect = imageRect;
-                    m_renderResources->DepthInfoViews[i].subImage.imageArrayIndex = i;
+#if false
+			// Prepare rendering parameters of each view for swapchain texture arrays
+			for (uint32_t i = 0; i < viewCountOutput; i++) {
+				m_renderResources->ProjectionLayerViews[i] = { XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW };
+				m_renderResources->ProjectionLayerViews[i].pose = viewProjections[i].Pose;
+				m_renderResources->ProjectionLayerViews[i].fov = m_renderResources->Views[i].fov;
+				m_renderResources->ProjectionLayerViews[i].subImage.swapchain = colorSwapchain.Handle.Get();
+				m_renderResources->ProjectionLayerViews[i].subImage.imageRect = imageRect;
+				m_renderResources->ProjectionLayerViews[i].subImage.imageArrayIndex = i;
 
-                    // Chain depth info struct to the corresponding projection layer views's next
-                    m_renderResources->ProjectionLayerViews[i].next = &m_renderResources->DepthInfoViews[i];
-                }
-            }
+				if (m_optionalExtensions.DepthExtensionSupported) {
+					m_renderResources->DepthInfoViews[i] = { XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR };
+					m_renderResources->DepthInfoViews[i].minDepth = 0;
+					m_renderResources->DepthInfoViews[i].maxDepth = 1;
+					m_renderResources->DepthInfoViews[i].nearZ = m_nearFar.Near;
+					m_renderResources->DepthInfoViews[i].farZ = m_nearFar.Far;
+					m_renderResources->DepthInfoViews[i].subImage.swapchain = depthSwapchain.Handle.Get();
+					m_renderResources->DepthInfoViews[i].subImage.imageRect = imageRect;
+					m_renderResources->DepthInfoViews[i].subImage.imageArrayIndex = i;
 
-            // For Hololens additive display, best to clear render target with transparent black color (0,0,0,0)
-            constexpr DirectX::XMVECTORF32 opaqueColor = {0.184313729f, 0.309803933f, 0.309803933f, 1.000000000f};
-            constexpr DirectX::XMVECTORF32 transparent = {0.000000000f, 0.000000000f, 0.000000000f, 0.000000000f};
-            const DirectX::XMVECTORF32 renderTargetClearColor =
-                (m_environmentBlendMode == XR_ENVIRONMENT_BLEND_MODE_OPAQUE) ? opaqueColor : transparent;
+					// Chain depth info struct to the corresponding projection layer views's next
+					m_renderResources->ProjectionLayerViews[i].next = &m_renderResources->DepthInfoViews[i];
+				}
+			}
+			m_tmr.RenderView(imageRect,
+				viewProjections,
+				colorSwapchain.Format,
+				colorSwapchain.Images[colorSwapchainImageIndex].texture,
+				depthSwapchain.Format,
+				depthSwapchain.Images[depthSwapchainImageIndex].texture);
+#else
+			for (int interpIdx=0; interpIdx<NUM_INTERPOLATE; ++interpIdx) {
+				// Prepare rendering parameters of each view for swapchain texture arrays
+				for (uint32_t i = 0; i < viewCountOutput; i++) {
+					viewProjections[i].Pose = PoseInterpolate(m_prevPoses[i], m_curPoses[i], (interpIdx+1.0f) / NUM_INTERPOLATE);
+					m_renderResources->ProjectionLayerViews[i] = {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW};
+					m_renderResources->ProjectionLayerViews[i].pose = viewProjections[i].Pose;
+					m_renderResources->ProjectionLayerViews[i].fov = m_renderResources->Views[i].fov;
+					m_renderResources->ProjectionLayerViews[i].subImage.swapchain = colorSwapchain.Handle.Get();
+					m_renderResources->ProjectionLayerViews[i].subImage.imageRect = imageRect;
+					m_renderResources->ProjectionLayerViews[i].subImage.imageArrayIndex = i;
 
-            m_cubeGraphics->SetCubes(visibleCubes);
+					if (m_optionalExtensions.DepthExtensionSupported) {
+						m_renderResources->DepthInfoViews[i] = {XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR};
+						m_renderResources->DepthInfoViews[i].minDepth = 0;
+						m_renderResources->DepthInfoViews[i].maxDepth = 1;
+						m_renderResources->DepthInfoViews[i].nearZ = m_nearFar.Near;
+						m_renderResources->DepthInfoViews[i].farZ = m_nearFar.Far;
+						m_renderResources->DepthInfoViews[i].subImage.swapchain = depthSwapchain.Handle.Get();
+						m_renderResources->DepthInfoViews[i].subImage.imageRect = imageRect;
+						m_renderResources->DepthInfoViews[i].subImage.imageArrayIndex = i;
 
-            // 画面とデプスをクリアー。
-            ClearColorDepth(imageRect,
-                            renderTargetClearColor,
-                            viewProjections,
-                            colorSwapchain.Format,
-                            colorSwapchain.Images[colorSwapchainImageIndex].texture,
-                            depthSwapchain.Format,
-                            depthSwapchain.Images[depthSwapchainImageIndex].texture);
+						// Chain depth info struct to the corresponding projection layer views's next
+						m_renderResources->ProjectionLayerViews[i].next = &m_renderResources->DepthInfoViews[i];
+					}
+				}
 
-            m_tmr.RenderView(imageRect,
-                             viewProjections,
-                             colorSwapchain.Format,
-                             colorSwapchain.Images[colorSwapchainImageIndex].texture,
-                             depthSwapchain.Format,
-                             depthSwapchain.Images[depthSwapchainImageIndex].texture);
+				m_tmr.RenderView(imageRect,
+								 viewProjections,
+								 colorSwapchain.Format,
+								 colorSwapchain.Images[colorSwapchainImageIndex].texture,
+								 depthSwapchain.Format,
+								 depthSwapchain.Images[depthSwapchainImageIndex].texture);
+			}
+#endif
 
             m_cubeGraphics->RenderView(imageRect,
                                        viewProjections,
@@ -860,6 +924,10 @@ namespace {
             layer.space = m_sceneSpace.Get();
             layer.viewCount = (uint32_t)m_renderResources->ProjectionLayerViews.size();
             layer.views = m_renderResources->ProjectionLayerViews.data();
+
+			for (uint32_t i = 0; i < NUM_VIEWS; ++i) {
+				m_prevPoses[i] = viewProjections[i].Pose;
+			}
             return true;
         }
 
@@ -888,6 +956,8 @@ namespace {
         const std::string m_appName;
         std::unique_ptr<sample::CubeRenderer> m_cubeGraphics;
         sample::TexturedMeshRenderer m_tmr;
+		std::vector<const sample::Cube*> m_visibleCubes;
+
 
         xr::InstanceHandle m_instance;
         xr::SessionHandle m_session;
@@ -922,6 +992,11 @@ namespace {
 
         XrEnvironmentBlendMode m_environmentBlendMode{};
         xr::math::NearFar m_nearFar{};
+
+		bool m_reversedZ = false;
+		const uint32_t NUM_VIEWS = 2;
+		std::array<XrPosef, 2> m_prevPoses;
+		std::array<XrPosef, 2> m_curPoses;
 
         struct SwapchainD3D11 {
             xr::SwapchainHandle Handle;

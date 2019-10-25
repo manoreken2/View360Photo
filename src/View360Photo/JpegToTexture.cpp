@@ -15,7 +15,7 @@ struct WH
 };
 
 /// @param portion 比率を0～1で指定。nullptrのとき全域をテクスチャーにする。
-static int ExtractJpegToBGRA(const wchar_t * path, const XrRect2Df *portion, D3D11_SUBRESOURCE_DATA &srd_r, WH& wh_r) {
+static int ExtractJpegToBGRA(const wchar_t * path, const XrRect2Df *portion, const uint8_t alpha, D3D11_SUBRESOURCE_DATA &srd_r, WH& wh_r) {
     Gdiplus::BitmapData bd;
     Gdiplus::Bitmap* bm = new Gdiplus::Bitmap(path, TRUE);
     if (bm == nullptr || bm->GetLastStatus() != Gdiplus::Ok) {
@@ -56,6 +56,18 @@ static int ExtractJpegToBGRA(const wchar_t * path, const XrRect2Df *portion, D3D
 		uint8_t *fromPos = lockedMem + cropR.X * 4 + bd.Stride * (y + cropR.Y);
 		memcpy(&rawBGRA[4 * cropW * y], fromPos, 4 * cropW);
 	}
+
+	if (alpha != 0xff) {
+		const uint32_t alpha32 = alpha << 24;
+		uint32_t *p = (uint32_t*)rawBGRA;
+		for (int y = 0; y < cropH; ++y) {
+			for (int x = 0; x < cropW; ++x) {
+				*p = (*p & 0x00ffffff) | alpha32;
+				++p;
+			}
+		}
+	}
+
     bm->UnlockBits(&bd);
 
     delete bm;
@@ -120,32 +132,10 @@ JpegToTexture::ImageFileToTexture(
         ID3D11Device* device,
         ID3D11DeviceContext* dctx,
         const wchar_t* path,
-        ID3D11Texture2D** tex_r, ID3D11ShaderResourceView** srv_r)
-{
-    D3D11_SUBRESOURCE_DATA srd;
-    WH wh;
-
-    int hr = ExtractJpegToBGRA(path, nullptr, srd, wh);
-    if (FAILED(hr)) {
-        return hr;
-    }
-
-    hr = CreateTextureFromMemory(device, dctx, wh, srd, tex_r, srv_r);
-    if (FAILED(hr)) {
-        return hr;
-    }
-
-    return S_OK;
-}
-
-int
-JpegToTexture::ImageFilePortionToTexture(
-        ID3D11Device* device,
-        ID3D11DeviceContext* dctx,
-        const wchar_t* path,
         const XrRect2Df &portion,
         ID3D11Texture2D** tex_r,
-        ID3D11ShaderResourceView** srv_r)
+        ID3D11ShaderResourceView** srv_r,
+		uint8_t alpha)
 {
     D3D11_SUBRESOURCE_DATA srd;
     WH wh;
@@ -155,7 +145,7 @@ JpegToTexture::ImageFilePortionToTexture(
 	assert(portion.offset.x + portion.extent.width <= 1.0f);
 	assert(portion.offset.y + portion.extent.height <= 1.0f);
 
-    int hr = ExtractJpegToBGRA(path, &portion, srd, wh);
+    int hr = ExtractJpegToBGRA(path, &portion, alpha, srd, wh);
     if (FAILED(hr)) {
         return hr;
     }

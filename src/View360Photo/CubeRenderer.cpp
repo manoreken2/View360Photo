@@ -111,50 +111,84 @@ namespace sample {
     void
     CubeRenderer::InitializeD3DResources(void)
     {
-        const winrt::com_ptr<ID3DBlob> vertexShaderBytes = sample::dx::CompileShader(CubeShader::ShaderHlsl, "MainVS", "vs_5_0");
-        CHECK_HRCMD(m_dev->CreateVertexShader(
-            vertexShaderBytes->GetBufferPointer(), vertexShaderBytes->GetBufferSize(), nullptr, m_vertexShader.put()));
+		{
+			const winrt::com_ptr<ID3DBlob> vertexShaderBytes = sample::dx::CompileShader(CubeShader::ShaderHlsl, "MainVS", "vs_5_0");
+			CHECK_HRCMD(m_dev->CreateVertexShader(
+				vertexShaderBytes->GetBufferPointer(), vertexShaderBytes->GetBufferSize(), nullptr, m_vertexShader.put()));
 
-        const winrt::com_ptr<ID3DBlob> pixelShaderBytes = sample::dx::CompileShader(CubeShader::ShaderHlsl, "MainPS", "ps_5_0");
-        CHECK_HRCMD(m_dev->CreatePixelShader(
-            pixelShaderBytes->GetBufferPointer(), pixelShaderBytes->GetBufferSize(), nullptr, m_pixelShader.put()));
+			const winrt::com_ptr<ID3DBlob> pixelShaderBytes = sample::dx::CompileShader(CubeShader::ShaderHlsl, "MainPS", "ps_5_0");
+			CHECK_HRCMD(m_dev->CreatePixelShader(
+				pixelShaderBytes->GetBufferPointer(), pixelShaderBytes->GetBufferSize(), nullptr, m_pixelShader.put()));
 
-        const D3D11_INPUT_ELEMENT_DESC vertexDesc[] = {
-            {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
-            {"COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
-        };
+			const D3D11_INPUT_ELEMENT_DESC vertexDesc[] = {
+				{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				{"COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+			};
 
-        CHECK_HRCMD(m_dev->CreateInputLayout(vertexDesc,
-                                                (UINT)std::size(vertexDesc),
-                                                vertexShaderBytes->GetBufferPointer(),
-                                                vertexShaderBytes->GetBufferSize(),
-                                                m_inputLayout.put()));
+			CHECK_HRCMD(m_dev->CreateInputLayout(vertexDesc,
+													(UINT)std::size(vertexDesc),
+													vertexShaderBytes->GetBufferPointer(),
+													vertexShaderBytes->GetBufferSize(),
+													m_inputLayout.put()));
+		}
 
-        const CD3D11_BUFFER_DESC modelConstantBufferDesc(sizeof(CubeShader::ModelConstantBuffer), D3D11_BIND_CONSTANT_BUFFER);
-        CHECK_HRCMD(m_dev->CreateBuffer(&modelConstantBufferDesc, nullptr, m_modelCBuffer.put()));
+		{
+			const CD3D11_BUFFER_DESC modelConstantBufferDesc(sizeof(CubeShader::ModelConstantBuffer), D3D11_BIND_CONSTANT_BUFFER);
+			CHECK_HRCMD(m_dev->CreateBuffer(&modelConstantBufferDesc, nullptr, m_modelCBuffer.put()));
+		}
 
-        const CD3D11_BUFFER_DESC viewProjectionConstantBufferDesc(sizeof(CubeShader::ViewProjectionConstantBuffer),
-                                                                    D3D11_BIND_CONSTANT_BUFFER);
-        CHECK_HRCMD(m_dev->CreateBuffer(&viewProjectionConstantBufferDesc, nullptr, m_viewProjectionCBuffer.put()));
+		{
+			const CD3D11_BUFFER_DESC viewProjectionConstantBufferDesc(sizeof(CubeShader::ViewProjectionConstantBuffer),
+																		D3D11_BIND_CONSTANT_BUFFER);
+			CHECK_HRCMD(m_dev->CreateBuffer(&viewProjectionConstantBufferDesc, nullptr, m_viewProjectionCBuffer.put()));
+		}
 
-        const D3D11_SUBRESOURCE_DATA vertexBufferData{CubeShader::c_cubeVertices};
-        const CD3D11_BUFFER_DESC vertexBufferDesc(sizeof(CubeShader::c_cubeVertices), D3D11_BIND_VERTEX_BUFFER);
-        CHECK_HRCMD(m_dev->CreateBuffer(&vertexBufferDesc, &vertexBufferData, m_cubeVertexBuffer.put()));
+		{
+			const D3D11_SUBRESOURCE_DATA vertexBufferData{CubeShader::c_cubeVertices};
+			const CD3D11_BUFFER_DESC vertexBufferDesc(sizeof(CubeShader::c_cubeVertices), D3D11_BIND_VERTEX_BUFFER);
+			CHECK_HRCMD(m_dev->CreateBuffer(&vertexBufferDesc, &vertexBufferData, m_cubeVertexBuffer.put()));
+		}
 
-        const D3D11_SUBRESOURCE_DATA indexBufferData{CubeShader::c_cubeIndices};
-        const CD3D11_BUFFER_DESC indexBufferDesc(sizeof(CubeShader::c_cubeIndices), D3D11_BIND_INDEX_BUFFER);
-        CHECK_HRCMD(m_dev->CreateBuffer(&indexBufferDesc, &indexBufferData, m_cubeIndexBuffer.put()));
+		{
+			const D3D11_SUBRESOURCE_DATA indexBufferData{CubeShader::c_cubeIndices};
+			const CD3D11_BUFFER_DESC indexBufferDesc(sizeof(CubeShader::c_cubeIndices), D3D11_BIND_INDEX_BUFFER);
+			CHECK_HRCMD(m_dev->CreateBuffer(&indexBufferDesc, &indexBufferData, m_cubeIndexBuffer.put()));
+		}
 
-        D3D11_FEATURE_DATA_D3D11_OPTIONS3 options;
-        m_dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS3, &options, sizeof(options));
-        CHECK_MSG(options.VPAndRTArrayIndexFromAnyShaderFeedingRasterizer,
-                    "This sample requires VPRT support. Adjust sample shaders on GPU without VRPT.");
+		{
+			D3D11_FEATURE_DATA_D3D11_OPTIONS3 options;
+			m_dev->CheckFeatureSupport(D3D11_FEATURE_D3D11_OPTIONS3, &options, sizeof(options));
+			CHECK_MSG(options.VPAndRTArrayIndexFromAnyShaderFeedingRasterizer,
+						"This sample requires VPRT support. Adjust sample shaders on GPU without VRPT.");
+		}
 
-        CD3D11_DEPTH_STENCIL_DESC depthStencilDesc(CD3D11_DEFAULT{});
-        depthStencilDesc.DepthEnable = true;
-        depthStencilDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
-        depthStencilDesc.DepthFunc = D3D11_COMPARISON_GREATER;
-        CHECK_HRCMD(m_dev->CreateDepthStencilState(&depthStencilDesc, m_reversedZDepthNoStencilTest.put()));
+		{
+			CD3D11_DEPTH_STENCIL_DESC dsd(CD3D11_DEFAULT{});
+			dsd.DepthEnable = true;
+			dsd.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+			dsd.DepthFunc = D3D11_COMPARISON_GREATER;
+			CHECK_HRCMD(m_dev->CreateDepthStencilState(&dsd, m_reversedZTestState.put()));
+		}
+		{
+			CD3D11_DEPTH_STENCIL_DESC dsd(CD3D11_DEFAULT{});
+			dsd.DepthEnable = true;
+			CHECK_HRCMD(m_dev->CreateDepthStencilState(&dsd, m_normalZTestState.put()));
+		}
+
+		{
+			D3D11_BLEND_DESC bd;
+			memset(&bd, 0, sizeof bd);
+			bd.RenderTarget[0].BlendEnable = FALSE;
+			bd.RenderTarget[0].RenderTargetWriteMask = 0x0f;
+			bd.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+			bd.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+			bd.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+			bd.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+			bd.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+			bd.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+
+			CHECK_HRCMD(m_dev->CreateBlendState(&bd, m_bs.put()));
+		}
     }
 
     void
@@ -184,17 +218,19 @@ namespace sample {
         CD3D11_DEPTH_STENCIL_VIEW_DESC depthStencilViewDesc(D3D11_DSV_DIMENSION_TEXTURE2DARRAY, depthSwapchainFormat);
         CHECK_HRCMD(m_dev->CreateDepthStencilView(depthTexture, &depthStencilViewDesc, depthStencilView.put()));
         const bool reversedZ = viewProjections[0].NearFar.Near > viewProjections[0].NearFar.Far;
-        m_dctx->OMSetDepthStencilState(reversedZ ? m_reversedZDepthNoStencilTest.get() : nullptr, 0);
+        m_dctx->OMSetDepthStencilState(reversedZ ? m_reversedZTestState.get() : m_normalZTestState.get(), 0);
 
         ID3D11RenderTargetView* renderTargets[] = {renderTargetView.get()};
         m_dctx->OMSetRenderTargets((UINT)std::size(renderTargets), renderTargets, depthStencilView.get());
+
+		m_dctx->OMSetBlendState(m_bs.get(), nullptr, 0xffffff);
 
         ID3D11Buffer* const constantBuffers[] = {m_modelCBuffer.get(), m_viewProjectionCBuffer.get()};
         m_dctx->VSSetConstantBuffers(0, (UINT)std::size(constantBuffers), constantBuffers);
         m_dctx->VSSetShader(m_vertexShader.get(), nullptr, 0);
         m_dctx->PSSetShader(m_pixelShader.get(), nullptr, 0);
 
-        CubeShader::ViewProjectionConstantBuffer viewProjectionCBufferData;
+		CubeShader::ViewProjectionConstantBuffer viewProjectionCBufferData = {};
 
         for (uint32_t k = 0; k < viewInstanceCount; k++) {
             const DirectX::XMMATRIX spaceToView = xr::math::LoadInvertedXrPose(viewProjections[k].Pose);
