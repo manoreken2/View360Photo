@@ -82,7 +82,7 @@ namespace {
             createInfo.enabledExtensionCount = (uint32_t)enabledExtensions.size();
             createInfo.enabledExtensionNames = enabledExtensions.data();
 
-            createInfo.applicationInfo = {"", 1, "OpenXR Sample", 1, XR_CURRENT_API_VERSION};
+            createInfo.applicationInfo = {PROGRAM_NAME, 1, "OpenXR Sample", 1, XR_CURRENT_API_VERSION};
             strcpy_s(createInfo.applicationInfo.applicationName, m_appName.c_str());
             CHECK_XRCMD(xrCreateInstance(&createInfo, m_instance.Put()));
         }
@@ -842,7 +842,7 @@ namespace {
             const uint32_t colorSwapchainImageIndex = AquireAndWaitForSwapchainImage(colorSwapchain.Handle.Get());
             const uint32_t depthSwapchainImageIndex = AquireAndWaitForSwapchainImage(depthSwapchain.Handle.Get());
 
-			CHECK(NUM_VIEWS == viewCountOutput);
+			CHECK(viewCountOutput <= NUM_VIEWS);
 			std::vector<xr::math::ViewProjection> viewProjections(viewCountOutput);
 			for (uint32_t i = 0; i < viewCountOutput; i++) {
 				viewProjections[i] = { m_renderResources->Views[i].pose, m_renderResources->Views[i].fov, m_nearFar };
@@ -940,7 +940,7 @@ namespace {
             layer.viewCount = (uint32_t)m_renderResources->ProjectionLayerViews.size();
             layer.views = m_renderResources->ProjectionLayerViews.data();
 
-			for (uint32_t i = 0; i < NUM_VIEWS; ++i) {
+			for (uint32_t i = 0; i < viewCountOutput; ++i) {
 				m_prevPoses[i] = viewProjections[i].Pose;
 			}
             return true;

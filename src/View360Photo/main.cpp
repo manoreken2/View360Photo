@@ -20,12 +20,7 @@
 #include "GdiplusHousekeeping.h"
 #include <windows.h>
 #include <comdef.h>
-
-#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-constexpr const char* ProgramName = "View360Photo v1.0.2";
-#else
-constexpr const char* ProgramName = "BasicXrApp_uwp";
-#endif
+#include "Config.h"
 
 static bool AttachToConsole(void) {
     if (!AttachConsole(ATTACH_PARENT_PROCESS)) {
@@ -54,7 +49,7 @@ int __stdcall wWinMain(HINSTANCE, HINSTANCE, LPWSTR, int) {
     }
 
     try {
-        auto program = sample::CreateOpenXrProgram(ProgramName);
+        auto program = sample::CreateOpenXrProgram(PROGRAM_NAME);
         rv = program->Run();
     } catch (const std::exception& ex) {
         DEBUG_PRINT("Unhandled Exception: %s\n", ex.what());

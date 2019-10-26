@@ -41,8 +41,8 @@ namespace TexturedMeshShader {
 		XrVector4f Alpha4;
 	};
 
-#if NUM_VIEWS != 2
-#  error
+#if NUM_VIEWS != 4
+#  error "please fix size of ViewProjection[] below"
 #endif
 	
 	// Separate entrypoints for the vertex and pixel shader functions.
@@ -53,7 +53,7 @@ namespace TexturedMeshShader {
 	        float4x4 Model;
         };
         cbuffer ViewProjCB : register(b1) {
-            float4x4 ViewProjection[2];
+            float4x4 ViewProjection[4];
         };
 
         struct VSOutput {
@@ -174,18 +174,21 @@ namespace sample {
 		}
 
 		{
+			// VS用定数バッファその1．b0
 			uint32_t szMC = sizeof(TexturedMeshShader::ModelCB);
 			const CD3D11_BUFFER_DESC bd(szMC, D3D11_BIND_CONSTANT_BUFFER);
 			CHECK_HRCMD(m_dev->CreateBuffer(&bd, nullptr, m_modelCB.put()));
 		}
 
 		{
+			// VS用定数バッファその2．b1
 			const CD3D11_BUFFER_DESC viewProjectionConstantBufferDesc(sizeof(TexturedMeshShader::ViewProjCB),
 																	  D3D11_BIND_CONSTANT_BUFFER);
 			CHECK_HRCMD(m_dev->CreateBuffer(&viewProjectionConstantBufferDesc, nullptr, m_viewProjCB.put()));
 		}
 
 		{
+			// アルファー値定数バッファは、PS用。
 			uint32_t szAC = sizeof(TexturedMeshShader::AlphaCB);
 			const CD3D11_BUFFER_DESC bd(szAC, D3D11_BIND_CONSTANT_BUFFER);
 			CHECK_HRCMD(m_dev->CreateBuffer(&bd, nullptr, m_alphaCB.put()));
@@ -260,7 +263,7 @@ namespace sample {
     {
         const uint32_t viewInstanceCount = (uint32_t)viewProjections.size();
         CHECK_MSG(viewInstanceCount <= NUM_VIEWS,
-                  "TexturedMeshShader supports 2 or fewer view instances. Adjust shader to accommodate more.")
+                  "TexturedMeshShader supports 4 or fewer view instances. Adjust shader to accommodate more.")
 
         CD3D11_VIEWPORT viewport(
             (float)imageRect.offset.x, (float)imageRect.offset.y, (float)imageRect.extent.width, (float)imageRect.extent.height);

@@ -72,8 +72,8 @@ namespace CubeShader {
         DirectX::XMFLOAT4X4 ViewProjection[2];
     };
 
-#if NUM_VIEWS != 2
-#  error
+#if 4 != NUM_VIEWS
+#  error "please fix size of ViewProjection[] below"
 #endif
 
     // Separate entrypoints for the vertex and pixel shader functions.
@@ -92,7 +92,7 @@ namespace CubeShader {
             float4x4 Model;
         };
         cbuffer ViewProjectionConstantBuffer : register(b1) {
-            float4x4 ViewProjection[2];
+            float4x4 ViewProjection[4];			
         };
 
         VSOutput MainVS(VSInput input) {
@@ -205,7 +205,7 @@ namespace sample {
     {
         const uint32_t viewInstanceCount = (uint32_t)viewProjections.size();
         CHECK_MSG(viewInstanceCount <= NUM_VIEWS,
-                    "Sample shader supports 2 or fewer view instances. Adjust shader to accommodate more.")
+                    "Shader supports 4 or fewer view instances. Adjust shader to accommodate more.")
 
         CD3D11_VIEWPORT viewport(
             (float)imageRect.offset.x, (float)imageRect.offset.y, (float)imageRect.extent.width, (float)imageRect.extent.height);
