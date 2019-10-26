@@ -18,6 +18,7 @@
 #include "pch.h"
 #include "CubeRenderer.h"
 #include "DxUtility.h"
+#include "Config.h"
 
 namespace CubeShader {
     struct Vertex {
@@ -71,7 +72,9 @@ namespace CubeShader {
         DirectX::XMFLOAT4X4 ViewProjection[2];
     };
 
-    constexpr uint32_t MaxViewInstance = 2;
+#if NUM_VIEWS != 2
+#  error
+#endif
 
     // Separate entrypoints for the vertex and pixel shader functions.
     constexpr char ShaderHlsl[] = R"_(
@@ -201,7 +204,7 @@ namespace sample {
             ID3D11Texture2D* depthTexture)
     {
         const uint32_t viewInstanceCount = (uint32_t)viewProjections.size();
-        CHECK_MSG(viewInstanceCount <= CubeShader::MaxViewInstance,
+        CHECK_MSG(viewInstanceCount <= NUM_VIEWS,
                     "Sample shader supports 2 or fewer view instances. Adjust shader to accommodate more.")
 
         CD3D11_VIEWPORT viewport(

@@ -7,7 +7,7 @@
 
 namespace sample {
 
-    struct TexturedMeshRenderer : IRenderObject {
+    struct TexturedMeshRenderer {
         TexturedMeshRenderer() = default;
         
         virtual ~TexturedMeshRenderer() = default;
@@ -23,11 +23,12 @@ namespace sample {
         // Render to swapchain images using stereo image array
         void RenderView(
             const XrRect2Di& imageRect,
+			const float alpha,
             const std::vector<xr::math::ViewProjection>& viewProjections,
             DXGI_FORMAT colorSwapchainFormat,
             ID3D11Texture2D* colorTexture,
             DXGI_FORMAT depthSwapchainFormat,
-            ID3D11Texture2D* depthTexture) override;
+            ID3D11Texture2D* depthTexture);
 
     private:
         static const int N_MESH = 2;
@@ -37,9 +38,10 @@ namespace sample {
         winrt::com_ptr<ID3D11VertexShader> m_vertexShader;
         winrt::com_ptr<ID3D11PixelShader> m_pixelShader;
         winrt::com_ptr<ID3D11InputLayout> m_inputLayout;
-        winrt::com_ptr<ID3D11Buffer> m_modelCBuffer;
-        winrt::com_ptr<ID3D11Buffer> m_viewProjectionCBuffer;
-        winrt::com_ptr<ID3D11DepthStencilState> m_noZtestState;
+        winrt::com_ptr<ID3D11Buffer> m_modelCB;
+        winrt::com_ptr<ID3D11Buffer> m_viewProjCB;
+		winrt::com_ptr<ID3D11Buffer> m_alphaCB;
+		winrt::com_ptr<ID3D11DepthStencilState> m_noZtestState;
         winrt::com_ptr<ID3D11SamplerState> m_sampler;
         winrt::com_ptr<ID3D11RasterizerState> m_rst;
 		winrt::com_ptr<ID3D11BlendState> m_addBlend;

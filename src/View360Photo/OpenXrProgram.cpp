@@ -249,6 +249,19 @@ namespace {
 				pose.position.z = 0;
 				m_prevPoses[i] = pose;
 			}
+
+			{
+				// ブラーテクスチャー描画アルファー値は、指数関数的に濃くして、Addblendするためにsumが1になるようにする。
+				float sum = 0;
+				for (uint32_t i = 0; i < NUM_BLUR; ++i) {
+					float a = (float)(1 << i);
+					m_alphas[i] = a;
+					sum += a;
+				}
+				for (int i = 0; i < NUM_BLUR; ++i) {
+					m_alphas[i] /= sum;
+				}
+			}
 		}
 
         void InitializeDevice(LUID adapterLuid, const std::vector<D3D_FEATURE_LEVEL>& featureLevels) {
@@ -875,10 +888,10 @@ namespace {
 				depthSwapchain.Format,
 				depthSwapchain.Images[depthSwapchainImageIndex].texture);
 #else
-			for (int interpIdx=0; interpIdx<NUM_INTERPOLATE; ++interpIdx) {
+			for (int interpIdx=0; interpIdx<NUM_BLUR; ++interpIdx) {
 				// Prepare rendering parameters of each view for swapchain texture arrays
 				for (uint32_t i = 0; i < viewCountOutput; i++) {
-					viewProjections[i].Pose = PoseInterpolate(m_prevPoses[i], m_curPoses[i], (interpIdx+1.0f) / NUM_INTERPOLATE);
+					viewProjections[i].Pose = PoseInterpolate(m_prevPoses[i], m_curPoses[i], (interpIdx+1.0f) / NUM_BLUR);
 					m_renderResources->ProjectionLayerViews[i] = {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW};
 					m_renderResources->ProjectionLayerViews[i].pose = viewProjections[i].Pose;
 					m_renderResources->ProjectionLayerViews[i].fov = m_renderResources->Views[i].fov;
@@ -901,12 +914,14 @@ namespace {
 					}
 				}
 
-				m_tmr.RenderView(imageRect,
-								 viewProjections,
-								 colorSwapchain.Format,
-								 colorSwapchain.Images[colorSwapchainImageIndex].texture,
-								 depthSwapchain.Format,
-								 depthSwapchain.Images[depthSwapchainImageIndex].texture);
+				m_tmr.RenderView(
+						imageRect,
+						m_alphas[interpIdx],
+						viewProjections,
+						colorSwapchain.Format,
+						colorSwapchain.Images[colorSwapchainImageIndex].texture,
+						depthSwapchain.Format,
+						depthSwapchain.Images[depthSwapchainImageIndex].texture);
 			}
 #endif
 
@@ -994,9 +1009,9 @@ namespace {
         xr::math::NearFar m_nearFar{};
 
 		bool m_reversedZ = false;
-		const uint32_t NUM_VIEWS = 2;
-		std::array<XrPosef, 2> m_prevPoses;
-		std::array<XrPosef, 2> m_curPoses;
+		std::array<XrPosef, NUM_VIEWS> m_prevPoses;
+		std::array<XrPosef, NUM_VIEWS> m_curPoses;
+		std::array<float, NUM_BLUR> m_alphas;
 
         struct SwapchainD3D11 {
             xr::SwapchainHandle Handle;

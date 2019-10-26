@@ -29,24 +29,30 @@ namespace TexturedMeshShader {
         XrVector2f Uv;
     };
 
-    struct ModelConstantBuffer {
-        DirectX::XMFLOAT4X4 Model;
-    };
+    struct ModelCB {
+		DirectX::XMFLOAT4X4 Model;
+	};
 
-    struct ViewProjectionConstantBuffer {
+    struct ViewProjCB {
         DirectX::XMFLOAT4X4 ViewProjection[2];
     };
 
-    constexpr uint32_t MaxViewInstance = 2;
+	struct AlphaCB {
+		XrVector4f Alpha4;
+	};
 
-    // Separate entrypoints for the vertex and pixel shader functions.
-    constexpr char ShaderHlsl[] = R"_(
+#if NUM_VIEWS != 2
+#  error
+#endif
+	
+	// Separate entrypoints for the vertex and pixel shader functions.
+    constexpr char VSShaderHlsl[] = R"_(
         Texture2D g_texture : register(t0);
         SamplerState g_sampler : register(s0);
-        cbuffer ModelConstantBuffer : register(b0) {
-            float4x4 Model;
+        cbuffer ModelCB : register(b0) {
+	        float4x4 Model;
         };
-        cbuffer ViewProjectionConstantBuffer : register(b1) {
+        cbuffer ViewProjCB : register(b1) {
             float4x4 ViewProjection[2];
         };
 
@@ -68,9 +74,25 @@ namespace TexturedMeshShader {
             output.viewId = input.instId;
             return output;
         }
+        )_";
+
+	constexpr char PSShaderHlsl[] = R"_(
+        Texture2D g_texture : register(t0);
+        SamplerState g_sampler : register(s0);
+        cbuffer AlphaCB : register(b0) {
+            float4 Alpha4;
+        };
+
+        struct VSOutput {
+            float4 Pos : SV_POSITION;
+            float2 Uv  : TEXCOORD;
+            uint viewId : SV_RenderTargetArrayIndex;
+        };
 
         float4 MainPS(VSOutput input) : SV_TARGET {
-            return g_texture.Sample(g_sampler, input.Uv);
+			float4 bgra = g_texture.Sample(g_sampler, input.Uv);
+			bgra.a = Alpha4.w;
+            return bgra;
         }
         )_";
 
@@ -79,11 +101,6 @@ namespace TexturedMeshShader {
 namespace sample {
     int TexturedMeshRenderer::Load(const wchar_t *imagePath) {
         int hr;
-#if NUM_INTERPOLATE == 1
-		const uint8_t alpha = 0xff;
-#else
-		const uint8_t alpha = 0x100 / NUM_INTERPOLATE;
-#endif
 		{
             TexturedMesh &mesh = m_meshes[0];
             mesh.Clear();
@@ -96,7 +113,7 @@ namespace sample {
 
             JpegToTexture jt;
             XrRect2Df leftHalf{ 0, 0, 0.5f, 1.0f };
-            hr = jt.ImageFileToTexture(m_dev, m_dctx, imagePath, leftHalf, (mesh.tex).put(), (mesh.srv).put(), alpha);
+            hr = jt.ImageFileToTexture(m_dev, m_dctx, imagePath, leftHalf, (mesh.tex).put(), (mesh.srv).put());
             if (FAILED(hr)) {
                 return hr;
             }
@@ -113,7 +130,7 @@ namespace sample {
 
             JpegToTexture jt;
             XrRect2Df rightHalf{ 0.5f, 0, 0.5f, 1.0f };
-            hr = jt.ImageFileToTexture(m_dev, m_dctx, imagePath, rightHalf, (mesh.tex).put(), (mesh.srv).put(), alpha);
+            hr = jt.ImageFileToTexture(m_dev, m_dctx, imagePath, rightHalf, (mesh.tex).put(), (mesh.srv).put());
             if (FAILED(hr)) {
                 return hr;
             }
@@ -136,11 +153,11 @@ namespace sample {
 
     void TexturedMeshRenderer::InitializeD3DResources(void) {
 		{
-			const winrt::com_ptr<ID3DBlob> vertexShaderBytes = sample::dx::CompileShader(TexturedMeshShader::ShaderHlsl, "MainVS", "vs_5_0");
+			const winrt::com_ptr<ID3DBlob> vertexShaderBytes = sample::dx::CompileShader(TexturedMeshShader::VSShaderHlsl, "MainVS", "vs_5_0");
 			CHECK_HRCMD(m_dev->CreateVertexShader(
 				vertexShaderBytes->GetBufferPointer(), vertexShaderBytes->GetBufferSize(), nullptr, m_vertexShader.put()));
 
-			const winrt::com_ptr<ID3DBlob> pixelShaderBytes = sample::dx::CompileShader(TexturedMeshShader::ShaderHlsl, "MainPS", "ps_5_0");
+			const winrt::com_ptr<ID3DBlob> pixelShaderBytes = sample::dx::CompileShader(TexturedMeshShader::PSShaderHlsl, "MainPS", "ps_5_0");
 			CHECK_HRCMD(m_dev->CreatePixelShader(
 				pixelShaderBytes->GetBufferPointer(), pixelShaderBytes->GetBufferSize(), nullptr, m_pixelShader.put()));
 
@@ -157,14 +174,21 @@ namespace sample {
 		}
 
 		{
-			const CD3D11_BUFFER_DESC modelConstantBufferDesc(sizeof(TexturedMeshShader::ModelConstantBuffer), D3D11_BIND_CONSTANT_BUFFER);
-			CHECK_HRCMD(m_dev->CreateBuffer(&modelConstantBufferDesc, nullptr, m_modelCBuffer.put()));
+			uint32_t szMC = sizeof(TexturedMeshShader::ModelCB);
+			const CD3D11_BUFFER_DESC bd(szMC, D3D11_BIND_CONSTANT_BUFFER);
+			CHECK_HRCMD(m_dev->CreateBuffer(&bd, nullptr, m_modelCB.put()));
 		}
 
 		{
-			const CD3D11_BUFFER_DESC viewProjectionConstantBufferDesc(sizeof(TexturedMeshShader::ViewProjectionConstantBuffer),
+			const CD3D11_BUFFER_DESC viewProjectionConstantBufferDesc(sizeof(TexturedMeshShader::ViewProjCB),
 																	  D3D11_BIND_CONSTANT_BUFFER);
-			CHECK_HRCMD(m_dev->CreateBuffer(&viewProjectionConstantBufferDesc, nullptr, m_viewProjectionCBuffer.put()));
+			CHECK_HRCMD(m_dev->CreateBuffer(&viewProjectionConstantBufferDesc, nullptr, m_viewProjCB.put()));
+		}
+
+		{
+			uint32_t szAC = sizeof(TexturedMeshShader::AlphaCB);
+			const CD3D11_BUFFER_DESC bd(szAC, D3D11_BIND_CONSTANT_BUFFER);
+			CHECK_HRCMD(m_dev->CreateBuffer(&bd, nullptr, m_alphaCB.put()));
 		}
 
 		{
@@ -227,6 +251,7 @@ namespace sample {
 
     void TexturedMeshRenderer::RenderView(
             const XrRect2Di& imageRect,
+			const float alpha,
             const std::vector<xr::math::ViewProjection>& viewProjections,
             DXGI_FORMAT colorSwapchainFormat,
             ID3D11Texture2D* colorTexture,
@@ -234,7 +259,7 @@ namespace sample {
             ID3D11Texture2D* depthTexture)
     {
         const uint32_t viewInstanceCount = (uint32_t)viewProjections.size();
-        CHECK_MSG(viewInstanceCount <= TexturedMeshShader::MaxViewInstance,
+        CHECK_MSG(viewInstanceCount <= NUM_VIEWS,
                   "TexturedMeshShader supports 2 or fewer view instances. Adjust shader to accommodate more.")
 
         CD3D11_VIEWPORT viewport(
@@ -259,40 +284,57 @@ namespace sample {
 
 		m_dctx->OMSetBlendState(m_addBlend.get(), nullptr, 0xffffff);
 
-        ID3D11Buffer* const constantBuffers[] = {m_modelCBuffer.get(), m_viewProjectionCBuffer.get()};
-        m_dctx->VSSetConstantBuffers(0, (UINT)std::size(constantBuffers), constantBuffers);
         m_dctx->VSSetShader(m_vertexShader.get(), nullptr, 0);
         m_dctx->PSSetShader(m_pixelShader.get(), nullptr, 0);
-
-		TexturedMeshShader::ViewProjectionConstantBuffer vpcb = {};
-
-        for (uint32_t k = 0; k < viewInstanceCount; k++) {
-            const DirectX::XMMATRIX spaceToView = xr::math::LoadInvertedXrPose(viewProjections[k].Pose);
-            const DirectX::XMMATRIX projectionMatrix = ComposeProjectionMatrix(viewProjections[k].Fov, viewProjections[k].NearFar);
-
-            // Set view projection matrix for each view, transpose for shader usage.
-            DirectX::XMStoreFloat4x4(&vpcb.ViewProjection[k],
-                                     DirectX::XMMatrixTranspose(spaceToView * projectionMatrix));
-        }
-        m_dctx->UpdateSubresource(m_viewProjectionCBuffer.get(), 0, nullptr, &vpcb, 0, 0);
+		ID3D11SamplerState* ss = m_sampler.get();
+		m_dctx->PSSetSamplers(0, 1, &ss);
 
         m_dctx->RSSetState(m_rst.get());
-        ID3D11SamplerState* ss = m_sampler.get();
-        m_dctx->PSSetSamplers(0, 1, &ss);
         m_dctx->IASetInputLayout(m_inputLayout.get());
 
-        {
-            XrPosef pose;
-            memset(&pose, 0, sizeof pose);
-            pose.position.z = 0.0f;//-5.0f;
-            pose.orientation.z = 1.0f;
-            float scale = 15.0f; //  radius meters
+		ID3D11Buffer* const vscb[] = { m_modelCB.get(), m_viewProjCB.get() };
+		m_dctx->VSSetConstantBuffers(0, (UINT)std::size(vscb), vscb);
+		ID3D11Buffer* const pscb[] = { m_alphaCB.get() };
+		m_dctx->PSSetConstantBuffers(0, (UINT)std::size(pscb), pscb);
+		{
+			// ModelCBをアップロード。
+			XrPosef pose;
+			memset(&pose, 0, sizeof pose);
+			pose.position.z = 0.0f;//-5.0f;
+			pose.orientation.z = 1.0f;
+			float scale = 15.0f; //  radius meters
 
-            // 姿勢行列 modelを作成。
-            TexturedMeshShader::ModelConstantBuffer model;
-            const DirectX::XMMATRIX scaleMatrix = DirectX::XMMatrixScaling(scale, scale, scale);
-            DirectX::XMStoreFloat4x4(&model.Model, DirectX::XMMatrixTranspose(scaleMatrix * xr::math::LoadXrPose(pose)));
-            m_dctx->UpdateSubresource(m_modelCBuffer.get(), 0, nullptr, &model, 0, 0);
+			// 姿勢行列 modelを作成。
+			TexturedMeshShader::ModelCB model;
+			const DirectX::XMMATRIX scaleMatrix = DirectX::XMMatrixScaling(scale, scale, scale);
+			DirectX::XMStoreFloat4x4(&model.Model, DirectX::XMMatrixTranspose(scaleMatrix * xr::math::LoadXrPose(pose)));
+
+			m_dctx->UpdateSubresource(m_modelCB.get(), 0, nullptr, &model, 0, 0);
+		}
+
+		{
+			// ViewProjCBをアップロード。
+			TexturedMeshShader::ViewProjCB vpcb = {};
+
+			for (uint32_t k = 0; k < viewInstanceCount; k++) {
+				const DirectX::XMMATRIX spaceToView = xr::math::LoadInvertedXrPose(viewProjections[k].Pose);
+				const DirectX::XMMATRIX projectionMatrix = ComposeProjectionMatrix(viewProjections[k].Fov, viewProjections[k].NearFar);
+
+				// Set view projection matrix for each view, transpose for shader usage.
+				DirectX::XMStoreFloat4x4(&vpcb.ViewProjection[k],
+					DirectX::XMMatrixTranspose(spaceToView * projectionMatrix));
+			}
+			m_dctx->UpdateSubresource(m_viewProjCB.get(), 0, nullptr, &vpcb, 0, 0);
+		}
+
+		{
+			// アルファー値。
+			TexturedMeshShader::AlphaCB acb;
+			acb.Alpha4.x = 1.0f;
+			acb.Alpha4.y = 1.0f;
+			acb.Alpha4.z = 1.0f;
+			acb.Alpha4.w = alpha;
+			m_dctx->UpdateSubresource(m_alphaCB.get(), 0, nullptr, &acb, 0, 0);
         }
 
         for (int i = 0; i < N_MESH; ++i) {
