@@ -2,11 +2,10 @@
 #pragma once
 
 #include <memory>
-#include "IRenderObject.h"
 #include "Cube.h"
 namespace sample {
 
-    struct CubeRenderer : IRenderObject {
+    struct CubeRenderer {
         virtual ~CubeRenderer() = default;
 
         void InitGraphcisResources(ID3D11Device* dev, ID3D11DeviceContext* dctx) {
@@ -20,7 +19,7 @@ namespace sample {
         }
 
         // Render to swapchain images using stereo image array
-        virtual void RenderView(const XrRect2Di& imageRect,
+        void RenderView(const XrRect2Di& imageRect,
                                 const std::vector<xr::math::ViewProjection>& viewProjections,
                                 DXGI_FORMAT colorSwapchainFormat,
                                 ID3D11Texture2D* colorTexture,

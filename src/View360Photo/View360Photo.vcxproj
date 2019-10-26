@@ -96,7 +96,6 @@
     <ClInclude Include="Cube.h" />
     <ClInclude Include="CubeRenderer.h" />
     <ClInclude Include="GdiplusHousekeeping.h" />
-    <ClInclude Include="IRenderObject.h" />
     <ClInclude Include="JpegToTexture.h" />
     <ClInclude Include="OpenXrProgram.h" />
     <ClInclude Include="pch.h" />

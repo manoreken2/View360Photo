@@ -2,7 +2,6 @@
 #pragma once
 
 #include <memory>
-#include "IRenderObject.h"
 #include "TexturedMesh.h"
 
 namespace sample {
